@@ -262,17 +262,25 @@ def lnprob(theta, x, y, yerr):
     return lp + log_likelihood_SFR_M(theta, x, y, yerr)
 
 def log_prior(theta):
-    m, b = theta
-    if 0.4 < m < 0.8 and 8 < b < 10:
+    m, b, llamb = theta
+    if 0.4 < m < 0.8 and 8 < b < 10 and -5.0 < llamb < 5.0:
         return 0.0
     return -np.inf
 
-def log_marg_prob(params,x,y,xerr,yerr):
-    m, b = params
-    Sigma2 = np.square(xerr*m) + np.square(yerr)
+def log_marg_prob(params, x, y, S, xerr, yerr):
+    m, b, llamb = params
+    v = np.array([-m, 1.0])
+    Sigma2 = np.dot(np.dot(S, v), v) + np.exp(2*llamb)
     DeltaN = y - (m*x) - b
     ll = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
     return ll + log_prior(params)
+
+def sample_log_marg_prob(params, x, S):
+    m, b, llamb = params
+    v = np.array([-m, 1.0])
+    Sigma2 = np.dot(np.dot(S, v), v) + np.exp(2*llamb)
+    mu = (m*x) + b
+    return np.random.normal(mu, Sigma2, 100)
 
 def SFRM_plane():
     # Reading in the GAMA file and converting to pandas df
@@ -662,14 +670,20 @@ def MH2_hist():
     plt.tight_layout()
     plt.savefig('MH2_hist.pdf')
 
-def plot_SFR_MH2_fit(xCOLDGASS_data, sampler_marg):
+def plot_SFR_MH2_fit(xCOLDGASS_data, sampler_marg, params, SFR, sample_likelihood):
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     ax[0,0].errorbar(xCOLDGASS_data['LOGSFR_BEST'], xCOLDGASS_data['MH2'], xerr = xCOLDGASS_data['LOGSFR_ERR'], yerr = xCOLDGASS_data['LOGMH2_ERR'], fmt='o', capsize = 0.1, markersize = 1, linewidth=0.1, markeredgewidth=0.1, capthick=0.1, mfc='darkgray', mec='gray', ecolor = 'gray')
     # Plot posterior predictions for a few samples.
     samples_marg = sampler_marg.flatchain
     x0 = np.array([-2.5, 1.5])
-    for m, b in samples_marg[np.random.randint(len(samples_marg), size=100)]:
+
+    for m, b, _ in samples_marg[np.random.randint(len(samples_marg), size=200)]:
         ax[0,0].plot(x0, m*x0 + b, lw=1, alpha=0.1, color="g")
+
+    for idx, element in enumerate(sample_likelihood):
+        ax[0,0].scatter(SFR, element, color = 'b', s = 0.5, alpha = 0.8)
+    ax[0,0].set_xlabel(r'$\log\,SFR\,[M_{\odot}yr^{-1}]$')
+    ax[0,0].set_ylabel(r'$\log\,M_{H2}\,[M_{\odot}]$')
     plt.tight_layout()
     plt.savefig('SFR_MH2.pdf')
 
@@ -683,15 +697,34 @@ def SFR_MH2_fit(xCOLDGASS_data):
     print (soln3["x"][0])
     # print (xCOLDGASS_data[['MH2', 'LOGMH2_ERR', 'LOGSFR_BEST', 'LOGSFR_ERR']])
     xCOLDGASS_data = xCOLDGASS_data[xCOLDGASS_data['LOGMH2_ERR']>0]
-    ndim, nwalkers = 2, 100
-    sampler_marg = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob, args = (xCOLDGASS_data['LOGSFR_BEST'], xCOLDGASS_data['MH2'], xCOLDGASS_data['LOGSFR_ERR'], xCOLDGASS_data['LOGMH2_ERR']))
-    pos = [[0.69, 9.01] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    x, y, xerr, yerr = xCOLDGASS_data['LOGSFR_BEST'], xCOLDGASS_data['MH2'], xCOLDGASS_data['LOGSFR_ERR'], xCOLDGASS_data['LOGMH2_ERR']
+    ndim, nwalkers = 3, 100
+
+    N = len(xerr)
+    S = np.zeros((N, 2, 2))
+    for n in range(N):
+        L = np.zeros((2, 2))
+        L[0,0] = np.square(xerr.values[n])
+        L[1,1] = np.square(yerr.values[n])
+        S[n] = L
+
+    sampler_marg = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob, args = (x, y, S, xerr, yerr))
+    pos = [[0.69, 9.01, 0.2] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler_marg.run_mcmc(pos, 500, progress=True)
     plot_samples(sampler_marg, ndim)
     samples = sampler_marg.chain[:, 150:, :].reshape((-1, ndim))
-    plot_SFR_MH2_fit(xCOLDGASS_data, sampler_marg)
+    samples2 = np.copy(samples)
+    # samples2[:, 2] = np.exp(samples2[:, 2])
+    m_mcmc, b_mcmc, f_mcmc = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),zip(*np.percentile(samples2, [16, 50, 84],axis=0)))
+    # print (m_mcmc, b_mcmc, f_mcmc)
+    params = m_mcmc[0], b_mcmc[0], f_mcmc[0]
+    print (params)
+    SFR = 0.0
+    sample_likelihood = sample_log_marg_prob(params, SFR, L)
+    plot_SFR_MH2_fit(xCOLDGASS_data, sampler_marg, params, SFR, sample_likelihood)
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    ax[0,0] = corner.corner(samples, labels=["$m$", "$b$"])
+    # samples[:, 2] = np.exp(samples[:, 2])
+    ax[0,0] = corner.corner(samples, labels=["$m$", "$b$", "$ln\lambda$"])
     plt.savefig("triangle2.png")
 
 # read_GAMA_A()
