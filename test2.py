@@ -95,7 +95,6 @@ def plot_MH2_SFR():
     ax[0,0].plot(SFR,y)
     plt.savefig('probs2.pdf')
 
-
 def integrand_stellar_mass(M):
     # Baldry+11 double Schechter function parameters
     Mstar = 10.66
@@ -202,7 +201,7 @@ def plot_samples(sampler, ndim, fname):
         ax.yaxis.set_label_coords(-0.1, 0.5)
 
     axes[-1].set_xlabel("step number");
-    plt.savefig('sampler' + fname + '.pdf')
+    plt.savefig('img/sampler' + fname + '.pdf')
 
 def plot_SFR_M_plane(GAMA, GAMAr, soln, soln2,soln3, x1, y1, std, sampler):
     ndim = 4
@@ -234,7 +233,7 @@ def plot_SFR_M_plane(GAMA, GAMAr, soln, soln2,soln3, x1, y1, std, sampler):
     # plt.xlim(8,11 .5)
     ax[0,0].set_ylim(-3.5,1.5)
     plt.legend()
-    plt.savefig('sfrmplane.png', dpi = 800)
+    plt.savefig('img/sfrmplane.png', dpi = 800)
     # print (GAMA)
 
 def plot_emcee_result(GAMA, samples, soln2):
@@ -260,7 +259,6 @@ def lnprob2(theta, x, y, yerr):
     if not np.isfinite(lp):
         return -np.inf
     return lp + log_likelihood_SFR_M2(theta, x, y, yerr)
-
 
 def lnprior(theta):
     a, b, lnf = theta
@@ -293,14 +291,6 @@ def log_prior_HI(theta):
     if 0.6 < m < 1.0 and 8.0 < b < 11.0 and -2 < llamb < 2:
         return 0.0
     return -np.inf
-
-# def log_marg_prob_HI(params, x, y, S):
-#     m, b, llamb = params
-#     v = np.array([-m, 1.0])
-#     Sigma2 = np.dot(np.dot(S, v), v) + np.exp(2*llamb)
-#     DeltaN = y - (m*x) - b
-#     ll = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
-#     return ll + log_prior_HI(params)
 
 def log_probability(theta, x, y, x2, y2, S, S2):
     m, const, lnf = theta
@@ -343,7 +333,7 @@ def sample_log_marg_prob(params, x, S):
 
 def SFRM_plane():
     # Reading in the GAMA file and converting to pandas df
-    GAMA = fits.open('GAMA.fits')
+    GAMA = fits.open('data/GAMA.fits')
     GAMA = Table(GAMA[1].data).to_pandas()
     GAMA['D_L'] = cosmo.luminosity_distance(GAMA['Z'])
     GAMA['D_L_cm'] = cosmo.luminosity_distance(GAMA['Z']).to(u.cm)
@@ -381,7 +371,7 @@ def second_order(a,b,c,x):
 
 def MainSequence():
     print ('read GAMA')
-    GAMA = pd.read_csv('GAMA_sample.dat', comment = '#', header = None, sep=r"\s*")
+    GAMA = pd.read_csv('data/GAMA_sample.dat', comment = '#', header = None, sep=r"\s*")
     GAMA.columns = ['CATAID', 'z', 'logM*', 'logM*err', 'logSFR', 'logSFRerr', 'ColorFlag']
     GAMA = GAMA[np.isfinite(GAMA['logSFR'])]
     GAMA = GAMA[np.isfinite(GAMA['logM*'])]
@@ -391,10 +381,6 @@ def MainSequence():
     GAMA = GAMA[GAMA['logSFR']>-3.5]
     GAMAb = GAMA[GAMA['ColorFlag']==1]
     GAMAr = GAMA[GAMA['ColorFlag']==2]
-    # plot_scatter(GAMA)
-    # GAMA = GAMA[GAMA['logSFR'] < second_order(-0.07918622,2.17981721,-13.90739982,GAMA['logM*']) + 1.0]
-    # GAMA = GAMA[GAMA['logSFR'] > second_order(-0.07918622,2.17981721,-13.90739982,GAMA['logM*']) - 1.0]
-
 
     bins = np.linspace(8,11,21)
     x1, y1, std = [], [], []
@@ -406,15 +392,11 @@ def MainSequence():
         std.append(np.std(inbin['logSFR']))
     x1, y1, std = np.array(x1), np.array(y1), np.array(std)
 
-
-
     nll = lambda *args: -log_likelihood_SFR_M2(*args)
     initial = np.array([ -0.067,   1.905, -30, 0.1])
     soln3 = minimize(nll, initial, args=(x1,y1,std))
     print ('soln binned')
     print (soln3.x)
-
-    # print (soln3)
 
     nll = lambda *args: -log_likelihood_SFR_M2(*args)
     initial = np.array([soln3.x[0], soln3.x[1], soln3.x[2], 0.05])
@@ -428,38 +410,17 @@ def MainSequence():
     initial = np.array([2, -20, 0.2])
     soln2 = minimize(nll, initial, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logSFRerr']))
 
-
-    # ndim, nwalkers = 3, 100
-    # pos = [soln2["x"] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(GAMA['logM*'], GAMA['logSFR'], GAMA['logSFRerr']))
-    # sampler.run_mcmc(pos, 500)
-    # samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
-    # plot_emcee_result(GAMA, samples, soln2)
-
-    # print (soln)
-
-    print ('emcee setup')
     ndim, nwalkers = 4, 100
     pos = [soln["x"] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    print ('sampler setup')
     sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']))
-    print ('running sampler')
     sampler.run_mcmc(pos, 500, progress=True)
     plot_samples(sampler, ndim, 'SFR_M*')
-    print ('sampler complete')
     samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
-    print (np.shape(samples))
     # plot_emcee_result(GAMA, samples, soln2)
-    samples[:, 3] = np.exp(samples[:, 3])
-    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    ax[0,0] = corner.corner(samples, labels=["$a$", "$b$", "$c$", "$\log\,\lambda$"],truths=[soln.x[0], soln.x[1], soln.x[2], soln.x[3]])
-    plt.savefig("triangle.png")
+    # samples[:, 3] = np.exp(samples[:, 3])
+    plot_corner2(samples, 'sfrmplane')
     plot_SFR_M_plane(GAMAb, GAMAr, soln, soln2, soln3, x1, y1, std, sampler)
     return samples
-
-    # print (soln['x'])
-    # print (soln2['x'])
-
 
 def log_likelihood(theta, x, y, yerr):
     # print (x)
@@ -579,10 +540,9 @@ def doubleschec(m1, m2):
     ax[0,0].plot(M, np.log10(y3), color = 'm', label ='fit', linestyle = ':')
     ax[0,0].plot(M2, np.log10(y4), color = 'k', label ='fit', linewidth = '4')
     ax[0,0].set_ylim(-6,0)
-    plt.savefig('baldry.pdf')
+    plt.savefig('img/baldry.pdf')
     plt.legend()
     return phis, M, baldry
-
 
 def log_schechter_fit(schechX, schechY):
     popt, pcov = curve_fit(log_schechter, schechX, schechY)
@@ -713,7 +673,7 @@ def SFR_hist():
     ax[0,0].set_ylabel(r'$\rm log \,\phi(SFR) \, [Mpc^{-3}]$')
     ax[0,0].set_ylim(-4,-0.5)
     plt.tight_layout()
-    plt.savefig('SFR_hist.pdf')
+    plt.savefig('img/SFR_hist.pdf')
 
 def MH2_hist(n, N, SFR_MH2_chain, Mstar_SFR_chain, fname):
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
@@ -793,7 +753,7 @@ def plot_SFR_MH2_fit(xCOLDGASS_data, xCOLDGASS_nondet, sampler_marg, params, SFR
     ax[0,0].set_xlim(-3,2)
     ax[0,0].set_ylim(7,10.5)
     plt.tight_layout()
-    plt.savefig('SFR_MH2.pdf')
+    plt.savefig('img/SFR_MH2.pdf')
 
 def SFR_MH2_fit(xCOLDGASS_data):
     nll = lambda *args: -log_likelihood_SFR_MH2(*args)
@@ -838,10 +798,6 @@ def SFR_MH2_fit(xCOLDGASS_data):
     # sample_likelihood = sample_log_marg_prob(params, SFR, L)
     plot_SFR_MH2_fit(xCOLDGASS_data, xCOLDGASS_nondet, sampler_marg, params, SFR, sample_likelihood)
     plot_corner(samples, 'sfrH2corner.pdf')
-    # fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    # samples[:, 2] = np.exp(samples[:, 2])
-    # ax[0,0] = corner.corner(samples, labels=["$m$", "$b$", "$log\lambda$"])
-    # plt.savefig("triangle2.png")
     return samples
 
 # Building x- and y-error matrix (in our case it is diagonal since errors aren't correlated)
@@ -869,10 +825,10 @@ def plotGASS(det,nondet, samples_marg):
     ax[0,0].errorbar((nondet['SFR_best']), nondet['lgMHI'], xerr = (nondet['SFRerr_best']), yerr = 0.2, uplims = True, fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='b', mec='b', ecolor = 'b')
     ax[0,0].set_xlim(-3,2)
     ax[0,0].set_ylim(7,11)
-    plt.savefig('HI-SFR.pdf')
+    plt.savefig('img/HI-SFR.pdf')
 
 def GASS():
-    xxGASS = fits.open('xxGASS_MASTER_CO_170620_final.fits')
+    xxGASS = fits.open('data/xxGASS_MASTER_CO_170620_final.fits')
     xxGASS = Table(xxGASS[1].data).to_pandas()
     xxGASS = xxGASS[xxGASS['SFR_best'] > -80]
     # xxGASS = xxGASS[xxGASS['SFR_best'] < 12]
@@ -935,10 +891,6 @@ def GASS():
     plot_samples(sampler_marg, ndim, 'MHI-SFR')
     samples = sampler_marg.chain[:, 200:, :].reshape((-1, ndim))
     plot_corner(samples, 'sfrHIcorner.pdf')
-    # fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    # samples[:, 2] = np.exp(samples[:, 2])
-    # ax[0,0] = corner.corner(samples, labels=["$m$", "$b$", "$log\lambda$"])
-    # plt.savefig("triangle3.png")
     plotGASS(det,nondet, samples)
     return samples
 
@@ -950,8 +902,17 @@ def plot_corner(samples_input, fname):
                   truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2])),
                   truth_color="k",
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
-    plt.savefig(fname)
+    plt.savefig('img/corner/' + fname)
 
+def plot_corner2(samples_input, fname):
+    samples_input[:, 3] = np.exp(samples_input[:, 3])
+    # plt.rc('text', usetex=True)
+    # plt.rc('font', family='serif')
+    corner.corner(samples_input, labels=["a", "b", "c", "scatter"],
+                  truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2]), np.median(samples_input[:, 3])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
 ## MAIN ########################################################################
 
 # SFRM_plane()
@@ -963,7 +924,7 @@ bootstrap = 0.8
 # # Producing the pandas catalogue
 #
 # Reading in the COLD GASS file and converting to pandas df
-xCOLDGASS = fits.open('xCOLDGASS_PubCat.fits')
+xCOLDGASS = fits.open('data/xCOLDGASS_PubCat.fits')
 xCOLDGASS_data = Table(xCOLDGASS[1].data).to_pandas()
 # Calculate lumdist, Vm, MH2 including limits
 V_CG, V_CG2 = calcVm(xCOLDGASS_data, len(xCOLDGASS_data), bootstrap)
@@ -982,9 +943,9 @@ Mstar_SFR_chain = MainSequence()
 SFR_MHI_chain = GASS()
 
 # plotting the H2 histograms sampling the emcee fits
-# MH2_hist(30, 100, SFR_MH2_chain, Mstar_SFR_chain, 'MH2_hist.pdf')
+# MH2_hist(30, 100, SFR_MH2_chain, Mstar_SFR_chain, 'img/MH2_hist.pdf')
 # plotting the HI histograms sampling the emcee fits
-MHI_hist(30, 10, SFR_MHI_chain, Mstar_SFR_chain, 'MHI_hist.pdf')
+MHI_hist(30, 10, SFR_MHI_chain, Mstar_SFR_chain, 'img/MHI_hist.pdf')
 
 
 # read_GAMA_A()
