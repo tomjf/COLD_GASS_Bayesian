@@ -990,8 +990,12 @@ def log_prior_all(theta):
         return 0.0
     return -np.inf
 
-def all_log_probability(theta, x, y, xerr, yerr, x1, x2, y1, y2, S1, S2, CGx1, CGx2, CGy1, CGy2, CGS1, CGS2, MHI, phi_alfa, phi_err_alfa):
+def all_log_probability(theta):
     a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = theta
+    x, y, xerr, yerr = GAMA_data
+    CGx1, CGx2, CGy1, CGy2, CGS1, CGS2 = COLD_GASS_data
+    x1, x2, y1, y2, S1, S2 = GASS_data
+    MHI, phi_alfa, phi_err_alfa = ALFALFA_data
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # log likelihood for the linear SFR-MHI plane
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1070,16 +1074,27 @@ def all_fits():
     S2 = S_error(nondet['SFRerr_best'].values, [0.14])
     x1, y1 = det['SFR_best'].values, det['lgMHI'].values
     x2, y2 = nondet['SFR_best'].values, nondet['lgMHI'].values
+    # set up all the data as global vars so not passed each time for threaded speed-up
+    global GAMA_data
+    global COLD_GASS_data
+    global GASS_data
+    global ALFALFA_data
+    GAMA_data = x, y, xerr, yerr
+    COLD_GASS_data = CGx1, CGx2, CGy1, CGy2, CGS1, CGS2
+    GASS_data = x1, x2, y1, y2, S1, S2
+    ALFALFA_data = MHI, phi_alfa, phi_err_alfa
     # emcee
-    ndim, nwalkers = 10, 100
+    ndim, nwalkers = 10, 30
     g_SFRM = [-0.07254516, 2.02271974, -13., -1.2]
     g_MHI = [0.8, 9.5, -0.9]
     g_MH2 = [.85, 8.92, -1.3]
     g = np.append(g_SFRM, g_MHI)
     g = np.append(g, g_MH2)
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, args = (x, y, xerr, yerr, x1, x2, y1, y2, S1, S2, CGx1, CGx2, CGy1, CGy2, CGS1, CGS2, MHI, phi_alfa, phi_err_alfa))
-    pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler.run_mcmc(pos, 1000, progress=True)
+    # emcee sampler
+    with Pool() as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, pool = pool)
+        pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+        sampler.run_mcmc(pos, 500, progress=True)
     # plot the walkers
     plot_samples7(sampler, ndim, 'all')
     # cut after they converge
@@ -1118,8 +1133,8 @@ random.seed(42)
 #     # print (idx)
 #     best_fits[0,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,-0.07, 1.90, -12.35, 0.31, 0.80, 9.49, 0.44, 0.85, 8.92, 0.26))[0]
 # test_schechter()
-# chain = all_fits()
-# chain = np.savetxt('converged2.txt', chain)
+chain = all_fits()
+chain = np.savetxt('converged2.txt', chain)
 
 # chain = np.loadtxt('converged2.txt')
 # plot_corner3(chain, 'constraint.pdf')
@@ -1140,9 +1155,9 @@ random.seed(42)
 #
 
 ################################################################################
-GAMA, GAMAb, GAMAr = read_GAMA()
+# GAMA, GAMAb, GAMAr = read_GAMA()
 # Doing the M*-SFR emcee fit and plot
-Mstar_SFR_chain = MainSequence()
+# Mstar_SFR_chain = MainSequence()
 # Doing the SFR-MH2 emcee fit and plot
 # xCOLDGASS_data = read_COLD_GASS()
 # SFR_MH2_chain = SFR_MH2_fit(xCOLDGASS_data)
