@@ -191,7 +191,7 @@ def gauss(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 def plot_scatter(GAMA):
-    GAMA = GAMA[(GAMA['logM*']>9.0) & (GAMA['logM*']<9.2)]
+    GAMA = GAMA[(GAMA['logM*']>8.8) & (GAMA['logM*']<9.2)]
 
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
@@ -200,7 +200,7 @@ def plot_scatter(GAMA):
     print (popt)
     x = np.linspace(-3.0,1.0,500)
     ax[0,0].plot(x,gauss(x,*popt))
-    plt.savefig('SFR_scatter.pdf')
+    plt.savefig('img/SFR_scatter.pdf')
 
 def plot_samples(sampler, ndim, fname):
     fig, axes = plt.subplots(4, figsize=(10, 7), sharex=True)
@@ -409,9 +409,18 @@ def read_GAMA():
     GAMAr = GAMA[GAMA['ColorFlag']==2]
     return GAMA, GAMAb, GAMAr
 
+# def SFRMplane_form(GAMAb):
+#     GAMAb = GAMAb[GAMAb['logM*']<9.0]
+#     GAMAb = GAMAb[GAMAb['logM*']>8.6]
+#     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
+#     n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
+#     plt.savefig('img/sfrmplane_form.png')
+
 def MainSequence():
     # read in the GAMA data for z<0.08
     GAMA, GAMAb, GAMAr = read_GAMA()
+    # SFRMplane_form(GAMAb)
+    plot_scatter(GAMAb)
     # binning the SFR-M plane
     bins = np.linspace(8,11,21)
     x1, y1, std = [], [], []
@@ -1099,10 +1108,11 @@ random.seed(42)
 #     # print (idx)
 #     best_fits[0,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,-0.07, 1.90, -12.35, 0.31, 0.80, 9.49, 0.44, 0.85, 8.92, 0.26))[0]
 # test_schechter()
-chain = all_fits()
-chain = np.savetxt('converged2.txt', chain)
+# chain = all_fits()
+# chain = np.savetxt('converged2.txt', chain)
 
-# chain = np.loadtxt('converged.txt')
+# chain = np.loadtxt('converged2.txt')
+# plot_corner3(chain, 'constraint.pdf')
 # params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
 # a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
 # print (a1)
@@ -1122,7 +1132,7 @@ chain = np.savetxt('converged2.txt', chain)
 ################################################################################
 
 # Doing the M*-SFR emcee fit and plot
-# Mstar_SFR_chain = MainSequence()
+Mstar_SFR_chain = MainSequence()
 # Doing the SFR-MH2 emcee fit and plot
 # xCOLDGASS_data = read_COLD_GASS()
 # SFR_MH2_chain = SFR_MH2_fit(xCOLDGASS_data)
