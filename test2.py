@@ -20,6 +20,10 @@ from scipy.integrate import quad, dblquad
 from scipy import special
 import random
 from integrand import integrand_MHI
+import os
+import time
+os.environ["OMP_NUM_THREADS"] = "1"
+from multiprocessing import Pool
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
 
 def log_schechter1(logL, log_rho, log_Lstar, alpha):
@@ -190,16 +194,22 @@ def integrand_MH2_red(M,SFR,MH2):
 def gauss(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
-def plot_scatter(GAMA):
-    GAMA = GAMA[(GAMA['logM*']>8.8) & (GAMA['logM*']<9.2)]
-
+def plot_scatter(GAMA, chain):
+    chain[:,3] = np.exp(chain[:, 3])
+    x1 = 8.0
+    GAMA = GAMA[(GAMA['logM*']>x1-0.1) & (GAMA['logM*']<x1+0.1)]
+    mu = -(0.07*x1*x1) + (1.91*x1) - 12.39
+    sigma = 0.31
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
     bins_mean = [0.5 * (bins[i] + bins[i+1]) for i in range(len(n))]
     popt,pcov = curve_fit(gauss,bins_mean,n,p0=[70,-0.5,0.2])
     print (popt)
     x = np.linspace(-3.0,1.0,500)
-    ax[0,0].plot(x,gauss(x,*popt))
+    ax[0,0].plot(x,gauss(x,*popt), label = 'gauss fit')
+    for a, b, c, sigma in chain[np.random.randint(len(chain), size=100)]:
+        ax[0,0].plot(x,gauss(x,popt[0], (a*x1*x1) + (b*x1) + c, sigma), alpha = 0.1, color = 'k')
+    plt.legend()
     plt.savefig('img/SFR_scatter.pdf')
 
 def plot_samples(sampler, ndim, fname):
@@ -344,8 +354,9 @@ def log_prior_MS(params):
         return 0.0
     return -np.inf
 
-def log_marg_prob_MS(params, x, y, xerr, yerr):
+def log_marg_prob_MS(params):
     a, b, c, llamb = params
+    x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
     Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*llamb)
     DeltaN = y - (a*x*x) - (b*x) - c
     ll = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
@@ -409,18 +420,11 @@ def read_GAMA():
     GAMAr = GAMA[GAMA['ColorFlag']==2]
     return GAMA, GAMAb, GAMAr
 
-# def SFRMplane_form(GAMAb):
-#     GAMAb = GAMAb[GAMAb['logM*']<9.0]
-#     GAMAb = GAMAb[GAMAb['logM*']>8.6]
-#     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-#     n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
-#     plt.savefig('img/sfrmplane_form.png')
-
 def MainSequence():
     # read in the GAMA data for z<0.08
     GAMA, GAMAb, GAMAr = read_GAMA()
     # SFRMplane_form(GAMAb)
-    plot_scatter(GAMAb)
+
     # binning the SFR-M plane
     bins = np.linspace(8,11,21)
     x1, y1, std = [], [], []
@@ -444,10 +448,16 @@ def MainSequence():
     ndim, nwalkers = 4, 100
     guess = [-0.07254516, 2.02271974, -13., 0.23]
     pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']))
-    sampler.run_mcmc(pos, 500, progress=True)
+    with Pool() as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
+        start = time.time()
+        sampler.run_mcmc(pos, 500, progress=True)
+        end = time.time()
+        multi_time = end - start
+    print (multi_time)
     plot_samples(sampler, ndim, 'SFR_M*')
     samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
+    plot_scatter(GAMAb, samples)
     plot_corner2(samples, 'sfrmplane')
     plot_SFR_M_plane(GAMAb, GAMAr, soln, x1, y1, std, samples)
     return samples
@@ -1061,21 +1071,21 @@ def all_fits():
     x1, y1 = det['SFR_best'].values, det['lgMHI'].values
     x2, y2 = nondet['SFR_best'].values, nondet['lgMHI'].values
     # emcee
-    ndim, nwalkers = 10, 30
+    ndim, nwalkers = 10, 100
     g_SFRM = [-0.07254516, 2.02271974, -13., -1.2]
     g_MHI = [0.8, 9.5, -0.9]
-    g_MH2 = [.69, 9.01, 0.2]
+    g_MH2 = [.85, 8.92, -1.3]
     g = np.append(g_SFRM, g_MHI)
     g = np.append(g, g_MH2)
     sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, args = (x, y, xerr, yerr, x1, x2, y1, y2, S1, S2, CGx1, CGx2, CGy1, CGy2, CGS1, CGS2, MHI, phi_alfa, phi_err_alfa))
     pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler.run_mcmc(pos, 500, progress=True)
+    sampler.run_mcmc(pos, 1000, progress=True)
     # plot the walkers
     plot_samples7(sampler, ndim, 'all')
     # cut after they converge
-    samples = sampler.chain[:, 400:, :].reshape((-1, ndim))
+    samples2 = sampler.chain[:, 400:, :].reshape((-1, ndim))
     # plot corner plot after convergence
-    plot_corner3(samples, 'all.pdf')
+    plot_corner3(samples2, 'all.pdf')
     # plot the SFR-MHI scaling relation with fits after convergence
     # plotGASS(det,nondet, samples)
     return samples
@@ -1130,7 +1140,7 @@ random.seed(42)
 #
 
 ################################################################################
-
+GAMA, GAMAb, GAMAr = read_GAMA()
 # Doing the M*-SFR emcee fit and plot
 Mstar_SFR_chain = MainSequence()
 # Doing the SFR-MH2 emcee fit and plot
