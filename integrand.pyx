@@ -1,7 +1,7 @@
 import numpy as np
 
-def integrand_MHI(double M, double SFR, double MHI, *params):
-    a1, a2, a3, lnf, b1, b2, lnf1 = params
+def integrand_MHI(double M, double SFR, *params):
+    MHI, a1, a2, a3, lnf, b1, b2, lnf1 = params
     cdef double Mstar = 10.72
     cdef double phistar1 = 0.71E-3
     cdef double alpha1 = -1.45

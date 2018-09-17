@@ -12,3 +12,5 @@ line\.ipynb
 master\.gz
 
 test\.py
+
+*.so

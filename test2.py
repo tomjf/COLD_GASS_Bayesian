@@ -16,7 +16,7 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 import emcee
 import corner
-from scipy.integrate import quad, dblquad
+from scipy.integrate import quad, dblquad, nquad
 from scipy import special
 import random
 from integrand import integrand_MHI
@@ -448,12 +448,12 @@ def MainSequence():
     ndim, nwalkers = 4, 100
     guess = [-0.07254516, 2.02271974, -13., 0.23]
     pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
-        start = time.time()
-        sampler.run_mcmc(pos, 500, progress=True)
-        end = time.time()
-        multi_time = end - start
+    pool = Pool(2)
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
+    start = time.time()
+    sampler.run_mcmc(pos, 500, progress=True)
+    end = time.time()
+    multi_time = end - start
     print (multi_time)
     plot_samples(sampler, ndim, 'SFR_M*')
     samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
@@ -793,8 +793,9 @@ def MHI_hist2(n, N, chain, fname):
         print (i)
         a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
         for idx, element in enumerate(MH2):
-            integrand = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
-            # print ('@', integrand)
+            # integrand = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
+            integrand = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
+            print ('@', integrand)
             best_fits[i,idx] = np.log10(integrand[0])
     for i in range(0,N):
         ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g')
@@ -1039,7 +1040,10 @@ def all_log_probability(theta):
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     best_fits = np.zeros((1,len(MHI)))
     for idx, element in enumerate(MHI):
+        # integral = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
         integral = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
+
+        # integral = dblquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
         # print (integral)
         best_fits[0,idx] = np.log10(integral[0])
     delta = phi_alfa - best_fits
@@ -1084,17 +1088,18 @@ def all_fits():
     GASS_data = x1, x2, y1, y2, S1, S2
     ALFALFA_data = MHI, phi_alfa, phi_err_alfa
     # emcee
-    ndim, nwalkers = 10, 30
+    ndim, nwalkers = 10, 100
     g_SFRM = [-0.07254516, 2.02271974, -13., -1.2]
     g_MHI = [0.8, 9.5, -0.9]
     g_MH2 = [.85, 8.92, -1.3]
     g = np.append(g_SFRM, g_MHI)
     g = np.append(g, g_MH2)
     # emcee sampler
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, pool = pool)
-        pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-        sampler.run_mcmc(pos, 500, progress=True)
+    pool = Pool(40)
+    # with Pool() as pool:
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, pool = pool)
+    pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    sampler.run_mcmc(pos, 1000, progress=True)
     # plot the walkers
     plot_samples7(sampler, ndim, 'all')
     # cut after they converge
@@ -1134,7 +1139,7 @@ random.seed(42)
 #     best_fits[0,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,-0.07, 1.90, -12.35, 0.31, 0.80, 9.49, 0.44, 0.85, 8.92, 0.26))[0]
 # test_schechter()
 chain = all_fits()
-chain = np.savetxt('converged2.txt', chain)
+chain = np.savetxt('converged.txt', chain)
 
 # chain = np.loadtxt('converged2.txt')
 # plot_corner3(chain, 'constraint.pdf')
@@ -1142,7 +1147,7 @@ chain = np.savetxt('converged2.txt', chain)
 # a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
 # print (a1)
 # print (params)
-# MHI_hist2(20, 10, chain, 'img/MHI2_hist.pdf')
+# MHI_hist2(20, 10, chain, 'img/MHI3_hist.pdf')
 
 
 # SFRM_plane()
