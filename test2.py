@@ -1,4 +1,4 @@
-import pyximport
+# import pyximport
 from astropy.io import fits
 from astropy.table import Table
 import math
