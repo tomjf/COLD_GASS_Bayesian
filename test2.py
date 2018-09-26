@@ -24,6 +24,7 @@ import os
 import time
 os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
+pd.options.mode.chained_assignment = None  # default='warn'
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
 
 def log_schechter1(logL, log_rho, log_Lstar, alpha):
@@ -408,7 +409,7 @@ def second_order(a,b,c,x):
     return (a*x*x) + (b*x) + c
 
 def read_GAMA():
-    GAMA = pd.read_csv('data/GAMA_sample.dat', comment = '#', header = None, sep=r"\s*")
+    GAMA = pd.read_csv('data/GAMA_sample.dat', comment = '#', header = None, sep = "\s+")
     GAMA.columns = ['CATAID', 'z', 'logM*', 'logM*err', 'logSFR', 'logSFRerr', 'ColorFlag']
     GAMA = GAMA[np.isfinite(GAMA['logSFR'])]
     GAMA = GAMA[np.isfinite(GAMA['logM*'])]
