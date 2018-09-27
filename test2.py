@@ -1090,13 +1090,13 @@ def all_fits():
     ALFALFA_data = MHI, phi_alfa, phi_err_alfa
     # emcee
     ndim, nwalkers = 10, 100
-    g_SFRM = [-0.07254516, 2.02271974, -13., -1.2]
-    g_MHI = [0.8, 9.5, -0.9]
+    g_SFRM = [-0.09, 2.31, -14.28, -1.17]
+    g_MHI = [0.87, 9.47, -0.75]
     g_MH2 = [.85, 8.92, -1.3]
     g = np.append(g_SFRM, g_MHI)
     g = np.append(g, g_MH2)
     # emcee sampler
-    pool = Pool(40)
+    pool = Pool(60)
     # with Pool() as pool:
     sampler = emcee.EnsembleSampler(nwalkers, ndim, all_log_probability, pool = pool)
     pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
@@ -1104,12 +1104,12 @@ def all_fits():
     # plot the walkers
     plot_samples7(sampler, ndim, 'all')
     # cut after they converge
-    samples2 = sampler.chain[:, 400:, :].reshape((-1, ndim))
+    samples2 = sampler.chain[:, 500:, :].reshape((-1, ndim))
     # plot corner plot after convergence
     plot_corner3(samples2, 'all.pdf')
     # plot the SFR-MHI scaling relation with fits after convergence
     # plotGASS(det,nondet, samples)
-    return samples
+    return samples2
 
 def test_schechter():
     x = np.linspace(6,11,100)
