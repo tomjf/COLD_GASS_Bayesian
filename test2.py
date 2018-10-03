@@ -1139,16 +1139,16 @@ random.seed(42)
 #     # print (idx)
 #     best_fits[0,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,-0.07, 1.90, -12.35, 0.31, 0.80, 9.49, 0.44, 0.85, 8.92, 0.26))[0]
 # test_schechter()
-chain = all_fits()
-chain = np.savetxt('converged.txt', chain)
+# chain = all_fits()
+# chain = np.savetxt('converged.txt', chain)
 
-# chain = np.loadtxt('converged2.txt')
+chain = np.loadtxt('converged.txt')
 # plot_corner3(chain, 'constraint.pdf')
 # params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
 # a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
 # print (a1)
 # print (params)
-# MHI_hist2(20, 10, chain, 'img/MHI3_hist.pdf')
+MHI_hist2(20, 10, chain, 'img/MHI3_hist.pdf')
 
 
 # SFRM_plane()
