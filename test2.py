@@ -19,7 +19,7 @@ import corner
 from scipy.integrate import quad, dblquad, nquad
 from scipy import special
 import random
-from integrand import integrand_MHI
+from integrand import integrand_MHI, integrand_MHI_var_sigma
 import os
 import time
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -195,23 +195,45 @@ def integrand_MH2_red(M,SFR,MH2):
 def gauss(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
-def plot_scatter(GAMA, chain):
-    chain[:,3] = np.exp(chain[:, 3])
+def linear(x,m,c):
+    return (m*x) + c
+
+def second(x,a,b,c):
+    return (a*x*x) + (b*x) + c
+
+def plot_scatter(GAMA):
+    # chain[:,3] = np.exp(chain[:, 3])
     x1 = 8.0
-    GAMA = GAMA[(GAMA['logM*']>x1-0.1) & (GAMA['logM*']<x1+0.1)]
-    mu = -(0.07*x1*x1) + (1.91*x1) - 12.39
-    sigma = 0.31
+    x = np.linspace(8.0,11,45)
+    sfr_bins = np.linspace(-3.5, 1.5, 50)
+    sfr_means = [0.5 * (sfr_bins[i] + sfr_bins[i+1]) for i in range(len(sfr_bins)-1)]
+    print (sfr_means)
+    sigmas = []
+    for idx, element in enumerate(x):
+        GAMA_c = GAMA[(GAMA['logM*']>element-0.3) & (GAMA['logM*']<element+0.3)]['logSFR'].values
+        bin_means = np.histogram(GAMA_c, sfr_bins)[0]
+        # print (bin_means)
+        popt, pcov = curve_fit(gauss, sfr_means, bin_means , p0=[70,-0.5,0.2])
+        sigmas.append(abs(popt[2]))
+
+    # mu = -(0.07*x1*x1) + (1.91*x1) - 12.39
+    # sigma = 0.31
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
-    bins_mean = [0.5 * (bins[i] + bins[i+1]) for i in range(len(n))]
-    popt,pcov = curve_fit(gauss,bins_mean,n,p0=[70,-0.5,0.2])
+    # n, bins, patches = ax[0,0].hist(GAMA['logSFR'], 50, facecolor='green', alpha=0.75)
+    # bins_mean = [0.5 * (bins[i] + bins[i+1]) for i in range(len(n))]
+    # popt,pcov = curve_fit(gauss,bins_mean,n,p0=[70,-0.5,0.2])
+    # print (popt)
+    # x = np.linspace(-3.0,1.0,500)
+    # ax[0,0].plot(x,gauss(x,*popt), label = 'gauss fit')
+    # for a, b, c, sigma in chain[np.random.randint(len(chain), size=100)]:
+        # ax[0,0].plot(x,gauss(x,popt[0], (a*x1*x1) + (b*x1) + c, sigma), alpha = 0.1, color = 'k')
+    popt, pcov = curve_fit(linear, x, np.log(sigmas), p0=[-0.1,1.0])
+    # popt2, pcov2 = curve_fit(second, x, sigmas, p0=[-0.1,-0.1,2.0])
+    plt.plot(x, np.log(sigmas))
+    plt.plot(x,linear(x,*popt))
+    # plt.plot(x,second(x,*popt2))
     print (popt)
-    x = np.linspace(-3.0,1.0,500)
-    ax[0,0].plot(x,gauss(x,*popt), label = 'gauss fit')
-    for a, b, c, sigma in chain[np.random.randint(len(chain), size=100)]:
-        ax[0,0].plot(x,gauss(x,popt[0], (a*x1*x1) + (b*x1) + c, sigma), alpha = 0.1, color = 'k')
-    plt.legend()
-    plt.savefig('img/SFR_scatter.pdf')
+    plt.savefig('img/intrinsic_scatter_vs_Mstar.pdf')
 
 def plot_samples(sampler, ndim, fname):
     fig, axes = plt.subplots(4, figsize=(10, 7), sharex=True)
@@ -241,27 +263,43 @@ def plot_samples7(sampler, ndim, fname):
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
 
-def plot_SFR_M_plane(GAMA, GAMAr, soln, x1, y1, std, sampler):
+def plot_samples11(sampler, ndim, fname):
+    fig, axes = plt.subplots(11, figsize=(10, 20), sharex=True)
+    samples = sampler.get_chain()
+    labels = ["a1", "a2", "a3", "a4", "a5", "b1", "b2", "log(f2)", "c1", "c2", "log(f3)"]
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
+
+def plot_SFR_M_plane(GAMA, GAMAr, sampler):
     ndim = 4
     # samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
     # sampler = sampler.flatchain[250:, :]
     print (GAMA.columns)
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     # plt.scatter(GAMA['logM*'], GAMA['logSFR'])
-    x=np.linspace(7,12,500)
-    y=(-.01828*x*x*x)+(0.4156*x*x) -(2.332*x)
-    y2=(soln.x[0]*x*x)+(soln.x[1]*x) +(soln.x[2])
+    # x=np.linspace(7,12,500)
+    # y=(-.01828*x*x*x)+(0.4156*x*x) -(2.332*x)
+    # y2=(soln.x[0]*x*x)+(soln.x[1]*x) +(soln.x[2])
     # y3=(soln2.x[0]*x)+(soln2.x[1])
     # y4=(soln3.x[0]*x*x)+(soln3.x[1]*x) +(soln3.x[2])
     # ax[0,0].errorbar(x1,y1, yerr=std, fmt='h', capsize = 4, markersize = 7, linewidth=2, markeredgewidth=2, capthick=3,  mfc='w', mec='k', ecolor = 'k')
-    ax[0,0].plot(x,y, color = 'red', label = 'Saintonge+16')
-    ax[0,0].plot(x,y2, color = 'g', label = 'GAMA 2nd order')
+    # ax[0,0].plot(x,y, color = 'red', label = 'Saintonge+16')
+    # ax[0,0].plot(x,y2, color = 'g', label = 'GAMA 2nd order')
     # ax[0,0].plot(x,y2+1.0, color = 'g', label = 'GAMA 2nd order')
     # ax[0,0].plot(x,y2-1.0, color = 'g', label = 'GAMA 2nd order')
     # ax[0,0].plot(x,y3, color = 'b', label = 'GAMA 1st order')
     # ax[0,0].plot(x,y4, color = 'k', label = 'Binned')
     # ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins=100, cmap = 'Blues', vmin=1,vmax =8)
-    ax[0,0].errorbar(GAMA['logM*'], GAMA['logSFR'], xerr = GAMA['logM*err'], yerr = GAMA['logSFRerr'], fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='gray', mec='gray', ecolor = 'gray')
+    # ax[0,0].errorbar(GAMA['logM*'], GAMA['logSFR'], xerr = GAMA['logM*err'], yerr = GAMA['logSFRerr'], fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='gray', mec='gray', ecolor = 'gray')
+    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 100)
+
     # ax[0,0].errorbar(GAMAr['logM*'], GAMAr['logSFR'], xerr = GAMAr['logM*err'], yerr = GAMAr['logSFRerr'], fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='r', mec='r', ecolor = 'r')
 
     x0=np.linspace(7,12,300)
@@ -357,7 +395,8 @@ def log_prior_MS(params):
 
 def log_marg_prob_MS(params):
     a, b, c, llamb = params
-    x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
+    x, y, xerr, yerr = GAMA_data
+    # x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
     Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*llamb)
     DeltaN = y - (a*x*x) - (b*x) - c
     ll = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
@@ -424,43 +463,46 @@ def read_GAMA():
 def MainSequence():
     # read in the GAMA data for z<0.08
     GAMA, GAMAb, GAMAr = read_GAMA()
+    x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
+    global GAMA_data
+    GAMA_data = x, y, xerr, yerr
+
     # SFRMplane_form(GAMAb)
 
     # binning the SFR-M plane
-    bins = np.linspace(8,11,21)
-    x1, y1, std = [], [], []
-    for i in range (1,len(bins)):
-        inbin = GAMAb[(GAMAb['logM*']>=bins[i-1]) & (GAMAb['logM*']< bins[i])]
-        x1.append((bins[i]+bins[i-1])/2)
-        y1.append(np.median(inbin['logSFR']))
-        std.append(np.std(inbin['logSFR']))
-    x1, y1, std = np.array(x1), np.array(y1), np.array(std)
+    # bins = np.linspace(8,11,21)
+    # x1, y1, std = [], [], []
+    # for i in range (1,len(bins)):
+        # inbin = GAMAb[(GAMAb['logM*']>=bins[i-1]) & (GAMAb['logM*']< bins[i])]
+        # x1.append((bins[i]+bins[i-1])/2)
+        # y1.append(np.median(inbin['logSFR']))
+        # std.append(np.std(inbin['logSFR']))
+    # x1, y1, std = np.array(x1), np.array(y1), np.array(std)
     # ML fit to binned data
-    nll = lambda *args: -log_likelihood_SFR_M2(*args)
-    initial = np.array([ -0.067,   1.905, -30, 0.1])
-    soln3 = minimize(nll, initial, args=(x1,y1,std))
+    # nll = lambda *args: -log_likelihood_SFR_M2(*args)
+    # initial = np.array([ -0.067,   1.905, -30, 0.1])
+    # soln3 = minimize(nll, initial, args=(x1,y1,std))
     # ML fit to unbinned data
-    nll = lambda *args: -log_likelihood_SFR_M2(*args)
-    initial = np.array([soln3.x[0], soln3.x[1], soln3.x[2], 0.05])
-    bnds = ((-0.1, -0.05), (2.0, 2.4), (-15,-13), (0.23,0.4))
-    soln = minimize(nll, initial, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logSFRerr']), method='TNC', bounds=bnds)
-    print ('soln', soln["x"])
+    # nll = lambda *args: -log_likelihood_SFR_M2(*args)
+    # initial = np.array([soln3.x[0], soln3.x[1], soln3.x[2], 0.05])
+    # bnds = ((-0.1, -0.05), (2.0, 2.4), (-15,-13), (0.23,0.4))
+    # soln = minimize(nll, initial, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logSFRerr']), method='TNC', bounds=bnds)
+    # print ('soln', soln["x"])
     # emcee fit using ML fit as initial guess
     ndim, nwalkers = 4, 100
-    guess = [-0.07254516, 2.02271974, -13., 0.23]
+    guess = [-0.07, 1.9, -12.32., 0.31]
     pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    pool = Pool(2)
+    pool = Pool(8)
     sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
-    start = time.time()
-    sampler.run_mcmc(pos, 500, progress=True)
-    end = time.time()
-    multi_time = end - start
-    print (multi_time)
+    # start = time.time()
+    sampler.run_mcmc(pos, 1000, progress=True)
+    # end = time.time()
+    # multi_time = end - start
+    # print (multi_time)
     plot_samples(sampler, ndim, 'SFR_M*')
-    samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
-    plot_scatter(GAMAb, samples)
+    samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
     plot_corner2(samples, 'sfrmplane')
-    plot_SFR_M_plane(GAMAb, GAMAr, soln, x1, y1, std, samples)
+    plot_SFR_M_plane(GAMAb, GAMAr, samples)
     return samples
 
 def log_likelihood(theta, x, y, yerr):
@@ -774,39 +816,73 @@ def MHI_hist(n, N, SFR_MH2_chain, Mstar_SFR_chain, fname):
     plt.tight_layout()
     plt.savefig(fname)
 
-def MHI_hist2(n, N, chain, fname):
+def draw_from_chain(n, N, chain, MH2):
+    best_fits = np.zeros((N,n))
+    for i in range(0,N):
+        print (i)
+        params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
+        a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
+        for idx, element in enumerate(MH2):
+            integrand = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
+            best_fits[i,idx] = np.log10(integrand[0])
+    return best_fits
+
+def draw_from_chain2(n, N, chain, MH2):
+    best_fits = np.zeros((N,n))
+    for i in range(0,N):
+        print (i)
+        params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
+        a1, a2, a3, a4, a5, b1, b2, lnf1, c1, c2, lnf2 = params[0]
+        for idx, element in enumerate(MH2):
+            integrand = nquad(integrand_MHI_var_sigma, [[0,12], [-5,2]], args = (element, a1, a2, a3, a4, a5, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
+            best_fits[i,idx] = np.log10(integrand[0])
+    return best_fits
+
+def draw_from_chain_MH2(n, N, chain, MH2):
+    best_fits = np.zeros((N,n))
+    for i in range(0,N):
+        print (i)
+        params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
+        a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
+        for idx, element in enumerate(MH2):
+            integrand = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, c1, c2, lnf2), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
+            best_fits[i,idx] = np.log10(integrand[0])
+    return best_fits
+
+def MHI_hist2(n, N, chain, chain2, chain3, fname):
     # read in the ALFA ALFA datasets from the 40% paper
     ALFAALFA = pd.read_csv('ALFAALFA.csv', comment = '#', header = None, sep=",")
     ALFAALFA.columns = ['x', 'y', 'dy', 'MHI', 'phi', 'err', 'phi_err']
     ALFAALFA = ALFAALFA[np.isfinite(ALFAALFA['phi_err'])]
     MH2, phi_alfa, phi_err_alfa = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
 
+    ALFAALFA2 = pd.read_csv('data/a99_HIMF.dat', comment = '#', sep=",")
+    MH22, phi_alfa2, phi_err_alfa2 = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
+    print (ALFAALFA2)
+
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     # MH2 = np.linspace(5,12,n)
     n = len(MH2)
-    phi = []
-    phi2 = []
-    best_fits = np.zeros((N,n))
-    # for idx, element in enumerate(MH2):
-    #     phi.append(dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,))[0])
-    for i in range(0,N):
-        params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
-        print (i)
-        a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
-        for idx, element in enumerate(MH2):
-            # integrand = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
-            integrand = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
-            print ('@', integrand)
-            best_fits[i,idx] = np.log10(integrand[0])
+
+    best_fits3 = draw_from_chain2(n, N, chain3, MH22)
+    print ('chain three done')
+    best_fits = draw_from_chain(n, N, chain, MH22)
+    print ('chain one done')
+    best_fits2 = draw_from_chain(n, N, chain2, MH22)
+    print ('chain two done')
+
+
     for i in range(0,N):
         ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g')
+        ax[0,0].plot(MH2, best_fits2[i,:], alpha = 0.1, color = 'b')
+        ax[0,0].plot(MH2, best_fits3[i,:], alpha = 0.1, color = 'r')
 
     y2 = log_schechter_true(MH2, 4.8E-3*(0.7**3), 9.96+(2*np.log10(0.7)), -1.33)
     y3 = log_schechter_true(MH2, 4.8E-3, 9.96, -1.33)
-    ax[0,0].plot(MH2, np.log10(y2), color = 'k')
+    # ax[0,0].plot(MH2, np.log10(y2), color = 'k')
     ax[0,0].plot(MH2, np.log10(y3), color = 'g')
     ax[0,0].errorbar(MH2, phi_alfa, yerr = phi_err_alfa, fmt='o', capsize = 2, markersize = 3, linewidth=2, markeredgewidth=2, capthick=2, mfc='gray', mec='gray', ecolor = 'gray')
-
+    ax[0,0].errorbar(MH22, phi_alfa2, yerr = phi_err_alfa2, fmt='o', capsize = 2, markersize = 3, linewidth=2, markeredgewidth=2, capthick=2, mfc='k', mec='k', ecolor = 'k')
 
     # ax[0,0].plot(MH2,np.log10(phi2), color = 'r')
     # ax[0,0].plot(MH2,np.log10(np.array(phi)+np.array(phi2)), color = 'k')
@@ -814,6 +890,51 @@ def MHI_hist2(n, N, chain, fname):
     ax[0,0].set_ylabel(r'$\rm log \,\phi(M_{HI}) \, [Mpc^{-3}]$')
     ax[0,0].set_ylim(-6,0)
     ax[0,0].set_xlim(6,11)
+    plt.tight_layout()
+    plt.savefig(fname)
+
+def MH2_hist2(n, N, chain, fname):
+    # read in the ALFA ALFA datasets from the 40% paper
+    # ALFAALFA = pd.read_csv('ALFAALFA.csv', comment = '#', header = None, sep=",")
+    # ALFAALFA.columns = ['x', 'y', 'dy', 'MHI', 'phi', 'err', 'phi_err']
+    # ALFAALFA = ALFAALFA[np.isfinite(ALFAALFA['phi_err'])]
+    # MH2, phi_alfa, phi_err_alfa = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
+    #
+    # ALFAALFA2 = pd.read_csv('data/a99_HIMF.dat', comment = '#', sep=",")
+    # MH22, phi_alfa2, phi_err_alfa2 = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
+    # print (ALFAALFA2)
+    MH2 = np.linspace(6,10.5,20)
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
+    # MH2 = np.linspace(5,12,n)
+    n = len(MH2)
+    #
+    # best_fits3 = draw_from_chain2(n, N, chain3, MH22)
+    # print ('chain three done')
+    best_fits = draw_from_chain_MH2(n, N, chain, MH2)
+    print ('chain one done')
+    # best_fits2 = draw_from_chain(n, N, chain2, MH22)
+    # print ('chain two done')
+
+
+    for i in range(0,N):
+        ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g')
+        # ax[0,0].plot(MH2, best_fits2[i,:], alpha = 0.1, color = 'b')
+        # ax[0,0].plot(MH2, best_fits3[i,:], alpha = 0.1, color = 'r')
+
+    # y2 = log_schechter_true(MH2, 4.8E-3*(0.7**3), 9.96+(2*np.log10(0.7)), -1.33)
+    # y3 = log_schechter_true(MH2, 4.8E-3, 9.96, -1.33)
+    # ax[0,0].plot(MH2, np.log10(y2), color = 'k')
+    # ax[0,0].plot(MH2, np.log10(y3), color = 'g')
+    # ax[0,0].errorbar(MH2, phi_alfa, yerr = phi_err_alfa, fmt='o', capsize = 2, markersize = 3, linewidth=2, markeredgewidth=2, capthick=2, mfc='gray', mec='gray', ecolor = 'gray')
+    # ax[0,0].errorbar(MH22, phi_alfa2, yerr = phi_err_alfa2, fmt='o', capsize = 2, markersize = 3, linewidth=2, markeredgewidth=2, capthick=2, mfc='k', mec='k', ecolor = 'k')
+
+    # ax[0,0].plot(MH2,np.log10(phi2), color = 'r')
+    # ax[0,0].plot(MH2,np.log10(np.array(phi)+np.array(phi2)), color = 'k')
+    ax[0,0].set_xlabel(r'$\rm log \,M_{H2} \, [M_{\odot}]$')
+    ax[0,0].set_ylabel(r'$\rm log \,\phi(M_{H2}) \, [Mpc^{-3}]$')
+    ax[0,0].set_ylim(-6,0)
+    ax[0,0].set_xlim(6.5,10.5)
     plt.tight_layout()
     plt.savefig(fname)
 
@@ -986,14 +1107,24 @@ def plot_corner3(samples_input, fname):
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('img/corner/' + fname)
 
+def plot_corner4(samples_input, fname):
+    # samples_input[:, 3] = np.exp(samples_input[:, 3])
+    samples_input[:, 7] = np.exp(samples_input[:, 6])
+    samples_input[:, 10] = np.exp(samples_input[:, 9])
+    corner.corner(samples_input, labels=["a", "a1", "a2", "a3", "a4", "b1", "b2", "f2", "c1", "c2", "f3"],
+                  truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2]), np.median(samples_input[:, 3]), np.median(samples_input[:, 4]), np.median(samples_input[:, 5]), np.median(samples_input[:, 6]), np.median(samples_input[:, 7]), np.median(samples_input[:, 8]), np.median(samples_input[:, 9]), np.median(samples_input[:, 10])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
+
 def log_prior_all(theta):
-    a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = theta
-    if -1.0 < a1 < 1.0 and 0.0 < a2 < 5.0 and -20.0 < a3 < -5.0 and -5.0 < lnf < 5.0 and 0.6 < b1 < 1.0 and 8.0 < b2 < 11.0 and -2 < lnf1 < 2 and 0.4 < c1 < 1.0 and 8 < c2 < 10 and -5.0 < lnf2 < 5.0:
+    a1, a2, a3, a4, a5, b1, b2, lnf1, c1, c2, lnf2 = theta
+    if -1.0 < a1 < 1.0 and 0.0 < a2 < 5.0 and -20.0 < a3 < -5.0 and -0.3 < a4 < 0.3 and 2.0 < a5 < 2.0 and 0.6 < b1 < 1.0 and 8.0 < b2 < 11.0 and -2 < lnf1 < 2 and 0.4 < c1 < 1.0 and 8 < c2 < 10 and -5.0 < lnf2 < 5.0:
         return 0.0
     return -np.inf
 
 def all_log_probability(theta):
-    a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = theta
+    a1, a2, a3, a4, a5, b1, b2, lnf1, c1, c2, lnf2 = theta
     x, y, xerr, yerr = GAMA_data
     CGx1, CGx2, CGy1, CGy2, CGS1, CGS2 = COLD_GASS_data
     x1, x2, y1, y2, S1, S2 = GASS_data
@@ -1002,11 +1133,11 @@ def all_log_probability(theta):
     # log likelihood for the linear SFR-MHI plane
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     v = np.array([-b1, 1.0])
+    deltaN = y1 - (b1 * x1) - b2
+    model = (b1 * x2) + b2
     sigma = np.dot(np.dot(S1, v), v) + np.exp(2 * lnf1)
     sigma2 = np.dot(np.dot(S2, v), v) + np.exp(2 * lnf1)
     sigma2 = sigma2 ** 0.5
-    deltaN = y1 - (b1 * x1) - b2
-    model = (b1 * x2) + b2
     ll1 = -0.5 * np.sum(np.square(deltaN) / sigma + np.log(sigma))
     I = np.zeros(len(x2))
     for i in range(0,len(x2)):
@@ -1033,28 +1164,30 @@ def all_log_probability(theta):
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # log likelihood for the SFR-M* plane
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    lnf = (a4*x) + a5
     Sigma2 = np.square(xerr)*np.square((2*a1*x) + a2) + np.square(yerr) + np.exp(2*lnf)
     DeltaN = y - (a1*x*x) - (a2*x) - a3
     LL_SFRM = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # log likelihood delta MHI
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    best_fits = np.zeros((1,len(MHI)))
-    for idx, element in enumerate(MHI):
-        # integral = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
-        integral = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
-
-        # integral = dblquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
-        # print (integral)
-        best_fits[0,idx] = np.log10(integral[0])
-    delta = phi_alfa - best_fits
-    LL_Delta_phi = -0.5 * np.sum(delta**2/phi_err_alfa + np.log(phi_err_alfa))
+    # best_fits = np.zeros((1,len(MHI)))
+    # for idx, element in enumerate(MHI):
+    #     # integral = nquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1), opts = [{'epsrel': 1e-2}, {'epsabs':0}])
+    #     integral = dblquad(integrand_MHI, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
+    #
+    #     # integral = dblquad(integrand_MHI, [[0,12], [-5,2]], args = (element, a1, a2, a3, lnf, b1, b2, lnf1))
+    #     # print (integral)
+    #     best_fits[0,idx] = np.log10(integral[0])
+    # delta = phi_alfa - best_fits
+    # LL_Delta_phi = -0.5 * np.sum(delta**2/phi_err_alfa + np.log(phi_err_alfa))
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return LL_SFR_MHI + LL_SFRM + LL_SFR_MH2 + LL_Delta_phi + log_prior_all(theta)
+    return LL_SFR_MHI + LL_SFRM + LL_SFR_MH2 + log_prior_all(theta)
 
 def all_fits():
     # read in the GAMA data for z<0.08
     GAMA, GAMAb, GAMAr = read_GAMA()
+    plot_scatter(GAMAb)
     x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
     # read in COLD GASS data
     xCOLDGASS_data = read_COLD_GASS()
@@ -1089,8 +1222,8 @@ def all_fits():
     GASS_data = x1, x2, y1, y2, S1, S2
     ALFALFA_data = MHI, phi_alfa, phi_err_alfa
     # emcee
-    ndim, nwalkers = 10, 100
-    g_SFRM = [-0.09, 2.31, -14.28, -1.17]
+    ndim, nwalkers = 11, 100
+    g_SFRM = [-0.09, 2.31, -14.28, -0.18978392, 0.69785714]
     g_MHI = [0.87, 9.47, -0.75]
     g_MH2 = [.85, 8.92, -1.3]
     g = np.append(g_SFRM, g_MHI)
@@ -1102,11 +1235,11 @@ def all_fits():
     pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler.run_mcmc(pos, 1000, progress=True)
     # plot the walkers
-    plot_samples7(sampler, ndim, 'all')
+    plot_samples11(sampler, ndim, 'all')
     # cut after they converge
     samples2 = sampler.chain[:, 500:, :].reshape((-1, ndim))
     # plot corner plot after convergence
-    plot_corner3(samples2, 'all.pdf')
+    # plot_corner3(samples2, 'all.pdf')
     # plot the SFR-MHI scaling relation with fits after convergence
     # plotGASS(det,nondet, samples)
     return samples2
@@ -1130,6 +1263,7 @@ def test_schechter():
 
 ## MAIN ########################################################################
 random.seed(42)
+MainSequence()
 
 # n=10
 # MH2 = np.linspace(5,12,n)
@@ -1140,15 +1274,18 @@ random.seed(42)
 #     best_fits[0,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element,-0.07, 1.90, -12.35, 0.31, 0.80, 9.49, 0.44, 0.85, 8.92, 0.26))[0]
 # test_schechter()
 # chain = all_fits()
-# chain = np.savetxt('converged.txt', chain)
-
-chain = np.loadtxt('converged.txt')
-# plot_corner3(chain, 'constraint.pdf')
+# chain = np.savetxt('converged_no_constraint3.txt', chain)
+#
+# chain = np.loadtxt('converged.txt')
+# chain2 = np.loadtxt('converged_no_constraint.txt')
+# chain3 = np.loadtxt('converged_no_constraint3.txt')
+# plot_corner4(chain3, 'no_constraint2.pdf')
 # params = chain[np.random.choice(chain.shape[0], size=1, replace=False), :]
 # a1, a2, a3, lnf, b1, b2, lnf1, c1, c2, lnf2 = params[0]
 # print (a1)
 # print (params)
-MHI_hist2(20, 10, chain, 'img/MHI3_hist.pdf')
+# MHI_hist2(20, 10, chain, chain2, chain3, 'img/MHI3_hist.pdf')
+# MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
 
 
 # SFRM_plane()

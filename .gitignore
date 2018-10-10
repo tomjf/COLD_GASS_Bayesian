@@ -14,3 +14,7 @@ master\.gz
 test\.py
 
 *.so
+
+log_normal\.py
+
+data/a99_HIMF\.dat
