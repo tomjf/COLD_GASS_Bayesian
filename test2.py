@@ -249,6 +249,20 @@ def plot_samples(sampler, ndim, fname):
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
 
+def plot_samples5(sampler, ndim, fname):
+    fig, axes = plt.subplots(5, figsize=(10, 7), sharex=True)
+    samples = sampler.get_chain()
+    labels = ["m", "b", "c", "d", "e"]
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
+
 def plot_samples7(sampler, ndim, fname):
     fig, axes = plt.subplots(10, figsize=(10, 20), sharex=True)
     samples = sampler.get_chain()
@@ -277,8 +291,8 @@ def plot_samples11(sampler, ndim, fname):
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
 
-def plot_SFR_M_plane(GAMA, GAMAr, sampler):
-    ndim = 4
+def plot_SFR_M_plane(GAMA , sampler):
+    # ndim = 4
     # samples = sampler.chain[:, 250:, :].reshape((-1, ndim))
     # sampler = sampler.flatchain[250:, :]
     print (GAMA.columns)
@@ -298,19 +312,47 @@ def plot_SFR_M_plane(GAMA, GAMAr, sampler):
     # ax[0,0].plot(x,y4, color = 'k', label = 'Binned')
     # ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins=100, cmap = 'Blues', vmin=1,vmax =8)
     # ax[0,0].errorbar(GAMA['logM*'], GAMA['logSFR'], xerr = GAMA['logM*err'], yerr = GAMA['logSFRerr'], fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='gray', mec='gray', ecolor = 'gray')
-    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 100)
+    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 100, cmap = 'Blues', label = 'GAMA data')
+    # ax[0,0].hist2d(GAMAr['logM*'], GAMAr['logSFR'], bins = 100,  label = 'GAMA data')
 
     # ax[0,0].errorbar(GAMAr['logM*'], GAMAr['logSFR'], xerr = GAMAr['logM*err'], yerr = GAMAr['logSFRerr'], fmt='o', capsize = .1, markersize = .4, linewidth=.1, markeredgewidth=.1, capthick=.1, mfc='r', mec='r', ecolor = 'r')
-
     x0=np.linspace(7,12,300)
-    for a, b, c, _ in sampler[np.random.randint(len(sampler), size=100)]:
-        ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="b")
+    for a, b1, dy, lnf1, lnf2 in sampler[np.random.randint(len(sampler), size=100)]:
+        ax[0,0].plot(x0, a*x0 + b1, lw=1, alpha=0.1, color="k")
+        ax[0,0].plot(x0, a*x0 + b1 + dy, lw=1, alpha=0.1, color="r")
+    a1,b1 = 0.6, -7.0
+    a,b = 0.5, -7.5
+    ax[0,0].plot(x0, a1*x0 + b1, lw=1, alpha=0.1, color="b")
+    ax[0,0].plot(x0, a*x0 + b, lw=1, alpha=0.1, color="g")
+    # for a, b, c, _ in sampler2[np.random.randint(len(sampler2), size=100)]:
+    #     ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="g")
+
     ax[0,0].set_xlim(7,12)
     # plt.xlim(8,11 .5)
     ax[0,0].set_ylim(-3.5,1.5)
     plt.legend()
+    plt.xlabel(r'$\mathrm{log_{10}(M_{*})}$')
+    plt.ylabel(r'$\mathrm{log_{10}(SFR)}$')
     plt.savefig('img/sfrmplane.png', dpi = 800)
     # print (GAMA)
+
+def plot_SFR_M_plane2(GAMA):
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
+    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 30, label = 'GAMA data', cmin = 13, cmax = 300)
+    # x0=np.linspace(7,12,300)
+    # for a, b, c, d, e in sampler[np.random.randint(len(sampler), size=100)]:
+    #     ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="b")
+    #
+    # for a, b, c, _ in sampler2[np.random.randint(len(sampler2), size=100)]:
+    #     ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="g")
+
+    ax[0,0].set_xlim(7,12)
+    # plt.xlim(8,11 .5)
+    ax[0,0].set_ylim(-3.5,1.5)
+    plt.legend()
+    plt.xlabel(r'$\mathrm{log_{10}(M_{*})}$')
+    plt.ylabel(r'$\mathrm{log_{10}(SFR)}$')
+    plt.savefig('img/sfrmplane2.png', dpi = 800)
 
 def plot_emcee_result(GAMA, samples, soln2):
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
@@ -387,17 +429,39 @@ def log_probability(theta, x, y, x2, y2, S, S2):
     ll2 = np.sum(I)
     return ll1  + ll2 + log_prior_HI(theta) # combining detection & non detection results
 
+def log_prior_MS1(params):
+    a, b1, dy, lnf1, lnf2 = params
+    if .4 < a < .8 and - 8.0 < b1 < -5.0 and -2.0 < dy < -0.5 and -5.0 < lnf1 < -5.0 and -5.0 < lnf2 < 5.0:
+        return 0.0
+    return -np.inf
+
+def log_marg_prob_MS1(params):
+    a, b1, dy, lnf1, lnf2 = params
+    x, y, xerr, yerr = GAMA_data
+
+    # Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*lnf)
+    Sigma2 = np.square(xerr*a) + np.square(yerr) + np.exp(2*lnf1)
+    DeltaN = y - (a*x*x) - (b1*x)
+    ll1 = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+
+    # Sigma2 = np.square(xerr*a) + np.square(yerr) + np.exp(2*lnf2)
+    DeltaN = y - (a*x*x) - (b1*x) - dy
+    ll2 = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+
+    return ll1 + ll2 + log_prior_MS1(params)
+
 def log_prior_MS(params):
-    a, b, c, llamb = params
-    if -1.0 < a < 1.0 and 0.0 < b < 5.0 and -20.0 < c < -5.0 and  -5.0 < llamb < 5.0:
+    a, b, c, d, e = params
+    if -0.2 < a < 0.05 and 1.5 < b < 2.5 and -14.0 < c < -11.0 and -0.3 < d < -0.1 and 0.6 < e < 0.8:
         return 0.0
     return -np.inf
 
 def log_marg_prob_MS(params):
-    a, b, c, llamb = params
+    a, b, c, d, e = params
     x, y, xerr, yerr = GAMA_data
+    lnf = np.log(d*x + e)
     # x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
-    Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*llamb)
+    Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*lnf)
     DeltaN = y - (a*x*x) - (b*x) - c
     ll = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
     return ll + log_prior_MS(params)
@@ -463,7 +527,8 @@ def read_GAMA():
 def MainSequence():
     # read in the GAMA data for z<0.08
     GAMA, GAMAb, GAMAr = read_GAMA()
-    x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
+    # x, y, xerr, yerr = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
+    x, y, xerr, yerr = GAMA['logM*'], GAMA['logSFR'], GAMA['logM*err'], GAMA['logSFRerr']
     global GAMA_data
     GAMA_data = x, y, xerr, yerr
 
@@ -489,21 +554,98 @@ def MainSequence():
     # soln = minimize(nll, initial, args=(GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logSFRerr']), method='TNC', bounds=bnds)
     # print ('soln', soln["x"])
     # emcee fit using ML fit as initial guess
-    ndim, nwalkers = 4, 100
-    guess = [-0.07, 1.9, -12.32., 0.31]
-    pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    # ndim, nwalkers = 5, 100
+    # guess = [-0.07, 1.9, -12.32, -0.2, 0.7]
+    # pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    # pool = Pool(8)
+    # sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
+    # sampler.run_mcmc(pos, 1000, progress=True)
+
+    ndim2, nwalkers2 = 5, 100
+    guess = [.6, -7.0, -1.0, -1.0, -1.21]
+    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
     pool = Pool(8)
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
-    # start = time.time()
-    sampler.run_mcmc(pos, 1000, progress=True)
-    # end = time.time()
-    # multi_time = end - start
-    # print (multi_time)
-    plot_samples(sampler, ndim, 'SFR_M*')
-    samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
-    plot_corner2(samples, 'sfrmplane')
-    plot_SFR_M_plane(GAMAb, GAMAr, samples)
-    return samples
+    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_prob_MS1, pool = pool)
+    sampler2.run_mcmc(pos, 1000, progress=True)
+
+    plot_samples5(sampler2, ndim2, 'SFR_M*')
+    # samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
+    samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    plot_corner2b(samples2, 'sfrmplane')
+    plot_SFR_M_plane(GAMA, samples2)
+    # return samples
+
+def double_gauss(x,a1,a2,mu1,mu2,s1,s2):
+    return a1*np.exp(-(x-mu1)**2/(2*s1**2)) + a2*np.exp(-(x-mu2)**2/(2*s2**2))
+
+def MainSequence2():
+    # read in the GAMA data for z<0.08
+    GAMA, GAMAb, GAMAr = read_GAMA()
+    x, y, xerr, yerr = GAMA['logM*'], GAMA['logSFR'], GAMA['logM*err'], GAMA['logSFRerr']
+    dd = GAMA[['logSFR', 'logM*']].values
+    grid = np.histogramdd(dd, bins=26)
+    print (grid[0][:,15])
+    # for i in range (0, np.shape(grid[0])[0]):
+    #     sfrs = grid[0][i,:]
+    #     mean_M = (grid[1][0][i] + grid[1][0][i+1])/2.0
+    #     print (mean_M)
+    # global GAMA_full_data
+    # GAMA_full_data = x, y, xerr, yerr
+    # dx = 0.2
+    # mstars = np.linspace(7,12,26)
+    # sfrs = np.linspace(-3.5,1.5,26)
+    # grid = np.zeros((len(sfrs), len(mstars)))
+    # for i, sfr in enumerate(sfrs):
+    #     GAMA_bin = GAMA[GAMA['logSFR'] >= sfr - dx]
+    #     GAMA_bin = GAMA_bin[GAMA_bin['logSFR'] < sfr + dx]
+    #     # print (sfr, GAMA_bin['logSFR'].values)
+    #     for j, mstar in enumerate(mstars):
+    #         GAMA_bin = GAMA_bin[GAMA_bin['logM*'] >= mstar - dx]
+    #         GAMA_bin = GAMA_bin[GAMA_bin['logM*'] < mstar + dx]
+    #         print (mstar, GAMA_bin['logM*'].values)
+    #         grid[i,j] = len(GAMA_bin)
+    # print (grid)
+    mstar = []
+    print (len(grid[1][1]))
+    for idx in range(0, len(grid[1][1]) - 1):
+        print (idx)
+        mstar.append((grid[1][1][idx]+grid[1][1][idx+1])/2)
+
+    popt, pcov = curve_fit(double_gauss, mstar, grid[0][:,14] , p0=[160,20,-0.5,-2,0.3,0.6])
+    print (popt)
+
+
+    fig, ax = plt.subplots(nrows = 2, ncols = 1, squeeze=False, figsize=(8,8))
+    ax[0,0].imshow(grid[0], origin = 'lower')
+    for (j,i),label in np.ndenumerate(grid[0]):
+        ax[0,0].text(i,j,int(label),ha='center',va='center')
+        # ax2.text(i,j,label,ha='center',va='center')
+    ax[1,0].plot(mstar,grid[0][:,14])
+    xo=np.linspace(7,11,200)
+    ax[1,0].plot(xo,double_gauss(xo,*popt))
+    ax[1,0].plot(xo,gauss(xo, popt[0], popt[2], popt[4]))
+    ax[1,0].plot(xo,gauss(xo, popt[1], popt[3], popt[5]))
+    plt.show()
+
+    # ndim, nwalkers = 5, 100
+    # guess = [-0.07, 1.9, -12.32, -0.2, 0.7]
+    # pos = [guess + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    # pool = Pool(8)
+    # sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_prob_MS, pool = pool)
+    # sampler.run_mcmc(pos, 1000, progress=True)
+    #
+    # ndim2, nwalkers2 = 4, 100
+    # guess = [-0.07, 1.9, -12.32, 0.31]
+    # pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    # pool = Pool(8)
+    # sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_prob_MS1, pool = pool)
+    # sampler2.run_mcmc(pos, 1000, progress=True)
+
+    # plot_samples5(sampler, ndim, 'SFR_M*')
+    # samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
+    # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    # plot_corner2b(samples, 'sfrmplane')
+    plot_SFR_M_plane2(GAMA)
 
 def log_likelihood(theta, x, y, yerr):
     # print (x)
@@ -623,8 +765,10 @@ def doubleschec(m1, m2):
     ax[0,0].plot(M, np.log10(y3), color = 'm', label ='fit', linestyle = ':')
     ax[0,0].plot(M2, np.log10(y4), color = 'k', label ='fit', linewidth = '4')
     ax[0,0].set_ylim(-6,0)
+    plt.xlabel(r'$\mathrm{log M_{*}}$', fontsize = 20)
+    plt.ylabel(r'$\mathrm{log \phi}$', fontsize = 20)
     plt.savefig('img/baldry.pdf')
-    plt.legend()
+    # plt.legend()
     return phis, M, baldry
 
 def log_schechter_fit(schechX, schechY):
@@ -1097,6 +1241,16 @@ def plot_corner2(samples_input, fname):
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('img/corner/' + fname)
 
+def plot_corner2b(samples_input, fname):
+    # samples_input[:, 3] = np.exp(samples_input[:, 3])
+    # plt.rc('text', usetex=True)
+    # plt.rc('font', family='serif')
+    corner.corner(samples_input, labels=["a", "b", "c", "d", "e"],
+                  truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2]), np.median(samples_input[:, 3]), np.median(samples_input[:, 4])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
+
 def plot_corner3(samples_input, fname):
     samples_input[:, 3] = np.exp(samples_input[:, 3])
     samples_input[:, 6] = np.exp(samples_input[:, 6])
@@ -1263,7 +1417,9 @@ def test_schechter():
 
 ## MAIN ########################################################################
 random.seed(42)
+# doubleschec(7, 11.5)
 MainSequence()
+# MainSequence()
 
 # n=10
 # MH2 = np.linspace(5,12,n)
