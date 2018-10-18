@@ -338,8 +338,9 @@ def plot_SFR_M_plane(GAMA , sampler):
 
 def plot_SFR_M_plane2(GAMA):
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 30, label = 'GAMA data', cmin = 13, cmax = 300)
-    # x0=np.linspace(7,12,300)
+    ax[0,0].hist2d(GAMA['logM*'], GAMA['logSFR'], bins = 30, label = 'GAMA data', cmin = 1, cmax = 300)
+    x0=np.linspace(7,12,300)
+    ax[0,0].plot(x0, (0.83*x0) + -9.5)
     # for a, b, c, d, e in sampler[np.random.randint(len(sampler), size=100)]:
     #     ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="b")
     #
@@ -347,7 +348,6 @@ def plot_SFR_M_plane2(GAMA):
     #     ax[0,0].plot(x0, a*x0*x0 + b*x0 + c, lw=1, alpha=0.1, color="g")
 
     ax[0,0].set_xlim(7,12)
-    # plt.xlim(8,11 .5)
     ax[0,0].set_ylim(-3.5,1.5)
     plt.legend()
     plt.xlabel(r'$\mathrm{log_{10}(M_{*})}$')
@@ -449,6 +449,27 @@ def log_marg_prob_MS1(params):
     ll2 = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
 
     return ll1 + ll2 + log_prior_MS1(params)
+
+def log_prior_MS2(params):
+    mu1, mu2, lnf1, lnf2 = params
+    if -2.0 < mu1 < -1.0 and - 0.8 < mu2 < 0.8 and -5.0 < lnf1 < -5.0 and -5.0 < lnf2 < 5.0:
+        return 0.0
+    return -np.inf
+
+def log_marg_prob_MS2(params):
+    mu1, mu2, lnf1, lnf2 = params
+    x, y, xerr, yerr = GAMA_data
+
+    # Sigma2 = np.square(xerr)*np.square((2*a*x) + b) + np.square(yerr) + np.exp(2*lnf)
+    Sigma2 = np.square(yerr) + np.exp(2*lnf1)
+    DeltaN = y - mu1
+    ll1 = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+
+    Sigma2 = np.square(yerr) + np.exp(2*lnf2)
+    DeltaN = y - mu2
+    ll2 = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+
+    return ll1 + ll2 + log_prior_MS2(params)
 
 def log_prior_MS(params):
     a, b, c, d, e = params
@@ -646,6 +667,118 @@ def MainSequence2():
     # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
     # plot_corner2b(samples, 'sfrmplane')
     plot_SFR_M_plane2(GAMA)
+
+def f_passive(x, a, b, zeta):
+    c = 1 + np.tanh(zeta)
+    return c + ((1-c)/(1+np.power(np.power(10,x-a), b)))
+
+def log_passive_fraction_priors(params):
+    a, b, zeta = params
+    if 10.0 < a < 11.0 and -3.0 < b < -0.2 and -3.0 < zeta < -1.0:
+        return 0.0
+    return -np.inf
+
+def log_marg_passive(params):
+    a, b, zeta = params
+    x, y, xerr, yerr = passive_data
+    c = .5*(1+np.tanh(zeta))
+    m = -(np.power(10,-a)*b*(1-c)*np.power((np.power(10,x-a)),-1+b))/(1+np.power(np.power(np.power(10,x-a),b),2))
+    m = m*np.power(10,x)
+    Sigma2 = np.square(xerr*m) + np.square(yerr)
+    Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-a), b))))
+    ll = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
+    return ll + log_passive_fraction_priors(params)
+
+def passive(GAMA_pass, GAMA_sf):
+    x = np.linspace(7.5,11.3,30)
+    x2 = np.linspace(6,12,300)
+    a = 10.804
+    b = -2.436
+    zeta = -1.621
+    c = 1 + np.tanh(zeta)
+    fpassive2 = c + ((1-c)/(1+np.power(np.power(10,x2-a), b)))
+    fpassive_gradient = - (np.power(10,-a+x2)*b*(1-c)*np.log(10))/np.power((1+np.power(np.power(10,x2-a),b)),2)
+    xnew, ratio, xerr, yerr = [], [], [], []
+    global passive_data
+    for i in range(0, len(x) - 1):
+        sf = GAMA_sf[GAMA_sf['logM*'] > x[i]]
+        sf = sf[sf['logM*'] <= x[i+1]]
+        passive = GAMA_pass[GAMA_pass['logM*'] > x[i]]
+        passive = passive[passive['logM*'] <= x[i+1]]
+        print (i, len(sf), len(passive))
+        ratio.append(len(passive)/(len(sf)+len(passive)))
+        xnew.append((x[i+1] + x[i])/2)
+        xerr.append(0.01)
+    passive_data = xnew, ratio, xerr, xerr
+    ndim2, nwalkers2 = 3, 100
+    guess = [10.552, -0.983, -2.14]
+    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    pool = Pool(8)
+    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
+    sampler2.run_mcmc(pos, 1000, progress=True)
+    plot_samples(sampler2, ndim2, 'SFR_M*')
+    samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    plot_corner_passive(samples2, 'passive_fraction')
+
+
+    popt, pcov = curve_fit(f_passive, xnew, ratio, p0 = [10.804, -2.436, -1.621])
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
+    ax[0,0].plot(xnew, ratio, label = 'GAMA Binned Data', color = 'k')
+    ax[0,0].plot(x2, fpassive2, label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
+    # ax[0,0].plot(x2, fpassive_gradient/80.0, label = 'gradient')
+    ax[0,0].plot(x2, f_passive(x2, *popt), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'b')
+    # ax[0,0].text(7, 0.55, 'Bull+17: ' + str(a) + ' ' + str(b) + ' ' + str(zeta))
+    # ax[0,0].text(7, 0.5, 'GAMA: ' + str(round(popt[0],3)) + ' ' + str(round(popt[1],3)) + ' ' + str(round(popt[2],3)))
+    i = 0
+    for a, b, zeta in samples2[np.random.randint(len(samples2), size=100)]:
+        if i == 0:
+            ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g', label = 'emcee parameter estimation, GAMA data')
+        else:
+            ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g')
+        i+=1
+    ax[0,0].set_xlabel(r'$\mathrm{log \,M_{*}}$', fontsize = 20)
+    ax[0,0].set_ylabel(r'$\mathrm{f_{passive}}$', fontsize = 20)
+    plt.legend()
+    plt.savefig('img/passive_ratio.pdf')
+    return ratio
+
+def MainSequence3():
+    # read in the GAMA data for z<0.08
+    GAMA, GAMAb, GAMAr = read_GAMA()
+    x, y, xerr, yerr = GAMA['logM*'], GAMA['logSFR'], GAMA['logM*err'], GAMA['logSFRerr']
+    dd = GAMA[['logSFR', 'logM*']].values
+    grid = np.histogramdd(dd, bins=26)
+    GAMA_pass = GAMA[GAMA['logSFR'] < (0.83*GAMA['logM*']) + -9.5]
+    GAMA_sf = GAMA[GAMA['logSFR'] >= (0.83*GAMA['logM*']) + -9.5]
+    passive(GAMA_pass, GAMA_sf)
+    plot_SFR_M_plane2(GAMA)
+
+def MainSequence_slice():
+    # read in the GAMA data for z<0.08
+    GAMA, GAMAb, GAMAr = read_GAMA()
+
+    GAMA_slice = GAMA[GAMA['logM*'] >= 10.0]
+    GAMA_slice = GAMA_slice[GAMA_slice['logM*'] < 10.5]
+    x, y, xerr, yerr = GAMA_slice['logM*'], GAMA_slice['logSFR'], GAMA_slice['logM*err'], GAMA_slice['logSFRerr']
+    global GAMA_data
+    GAMA_data = x, y, xerr, yerr
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
+    ndim2, nwalkers2 = 4, 100
+    guess = [-1.67, 0.1, 0.4, 0.3]
+    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    pool = Pool(8)
+    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_prob_MS2, pool = pool)
+    sampler2.run_mcmc(pos, 1000, progress=True)
+
+    plot_samples(sampler2, ndim2, 'SFR_M*')
+    # samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
+    # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    # plot_corner2b(samples2, 'sfrmplane')
+    # plot_SFR_M_plane(GAMA, samples2)
+    # ax[0,0].imshow(grid[0], origin = 'lower')
+    # n, bins, patches = ax[0,0].hist(GAMA_slice['logSFR'], 50, normed=1, facecolor='green', alpha=0.75)
+    # plt.show()
+
 
 def log_likelihood(theta, x, y, yerr):
     # print (x)
@@ -1231,6 +1364,13 @@ def plot_corner(samples_input, fname):
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('img/corner/' + fname)
 
+def plot_corner_passive(samples_input, fname):
+    corner.corner(samples_input, labels=[r"$\alpha$", r"$\beta$", r"$\zeta$"],
+                  truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
+
 def plot_corner2(samples_input, fname):
     samples_input[:, 3] = np.exp(samples_input[:, 3])
     # plt.rc('text', usetex=True)
@@ -1417,8 +1557,10 @@ def test_schechter():
 
 ## MAIN ########################################################################
 random.seed(42)
+MainSequence3()
+# MainSequence_slice()
 # doubleschec(7, 11.5)
-MainSequence()
+# MainSequence()
 # MainSequence()
 
 # n=10
