@@ -263,17 +263,42 @@ def plot_samples5(sampler, ndim, fname):
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
 
-def plot_samples7(sampler, ndim, fname):
-    fig, axes = plt.subplots(10, figsize=(10, 20), sharex=True)
+def plot_samples_passive(sampler, ndim, fname):
+    fig, axes = plt.subplots(3, figsize=(10, 20), sharex=True)
     samples = sampler.get_chain()
-    labels = ["a1", "a2", "a3", "log(f)", "b1", "b2", "log(f2)", "c1", "c2", "log(f3)"]
+    labels = ['alpha', 'beta', 'zeta']
     for i in range(ndim):
         ax = axes[i]
         ax.plot(samples[:, :, i], "k", alpha=0.3)
         ax.set_xlim(0, len(samples))
         ax.set_ylabel(labels[i])
         ax.yaxis.set_label_coords(-0.1, 0.5)
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
 
+def plot_samples_blue(sampler, ndim, fname):
+    fig, axes = plt.subplots(4, figsize=(10, 20), sharex=True)
+    samples = sampler.get_chain()
+    labels = ['a1', 'a2', 'a3', 'lnf']
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
+
+def plot_samples_full(sampler, ndim, fname):
+    fig, axes = plt.subplots(9, figsize=(10, 20), sharex=True)
+    samples = sampler.get_chain()
+    labels = ['alpha', 'beta', 'zeta', 'a1', 'a2', 'a3', 's1', 'dy', 's2']
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
 
@@ -673,23 +698,84 @@ def f_passive(x, a, b, zeta):
     return c + ((1-c)/(1+np.power(np.power(10,x-a), b)))
 
 def log_passive_fraction_priors(params):
-    a, b, zeta = params
-    if 10.0 < a < 11.0 and -3.0 < b < -0.2 and -3.0 < zeta < -1.0:
+    alpha, beta, zeta = params
+    if 10.0 < alpha < 11.0 and -3.0 < beta < -0.2 and -3.0 < zeta < -1.0:
         return 0.0
     return -np.inf
 
 def log_marg_passive(params):
-    a, b, zeta = params
+    alpha, beta, zeta = params
     x, y, xerr, yerr = passive_data
+    # passive fraction likelihood
     c = .5*(1+np.tanh(zeta))
-    m = -(np.power(10,-a)*b*(1-c)*np.power((np.power(10,x-a)),-1+b))/(1+np.power(np.power(np.power(10,x-a),b),2))
+    m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
     m = m*np.power(10,x)
     Sigma2 = np.square(xerr*m) + np.square(yerr)
-    Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-a), b))))
-    ll = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
-    return ll + log_passive_fraction_priors(params)
+    Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
+    ll_passive_fraction = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
 
-def passive(GAMA_pass, GAMA_sf):
+    # # star forming likelihood
+    # x, y, xerr, yerr = sforming
+    # Sigma2 = np.square(xerr)*np.square((2*a1*x) + a2) + np.square(yerr) + np.exp(2*lnf)
+    # DeltaN = y - (a1*x*x) - (a2*x) - a3
+    # ll_sforming = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+
+    return ll_passive_fraction + log_passive_fraction_priors(params)
+
+def log_mainsequence_priors(params):
+    a1, a2, a3, lnf = params
+    if -0.2 < a1 < 0.05 and 1.0 < a2 < 3.0 and -20.0 < a3 < -10.0 and -5.0 < lnf < -5.0:
+        return 0.0
+    return -np.inf
+
+def log_marg_mainsequence(params):
+    a1, a2, a3, lnf = params
+    x, y, xerr, yerr = sforming
+    Sigma2 = np.square(xerr)*np.square((2*a1*x) + a2) + np.square(yerr) + np.exp(2*lnf)
+    DeltaN = y - (a1*x*x) - (a2*x) - a3
+    ll_sforming = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2))
+    return ll_sforming + log_mainsequence_priors(params)
+
+def log_mainsequence_priors_full(params):
+    alpha, beta, zeta, a1, a2, a3, s1, dy, s2 = params
+    if 10.4 < alpha < 10.7 and \
+    -1.2 < beta < -0.8 and \
+    -2.2 < zeta < --1.5 and \
+    -0.2 < a1 < 0.1 and \
+    0.0 < a2 < 3.0 and \
+    -16.0 < a3 < -10.0 and \
+    -2.0 < s1 < 0.0 and \
+    -0.5 < dy < -3.0 and \
+    -2.0 < s2 < 0.0:
+        return 0.0
+    return -np.inf
+
+def log_marg_mainsequence_full(params):
+    alpha, beta, zeta, a1, a2, a3, s1, dy, s2 = params
+    # read in the data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    x, y, xerr, yerr = passive_data
+    x2, y2, xerr2, yerr2 = GAMA_data
+    # passive fraction likelihood ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    c = .5*(1+np.tanh(zeta))
+    m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
+    m = m*np.power(10,x)
+    Sigma2 = np.square(xerr*m) + np.square(yerr)
+    Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
+    ll_passive_fraction = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
+    fpass = f_passive(x2, alpha, beta, zeta)
+    # star forming likelihood ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Sigma2 = np.square(xerr2)*np.square((2*a1*x2) + a2) + np.square(yerr2) + np.exp(2*s1)
+    DeltaN = y2 - (a1*x2*x2) - (a2*x2) - a3
+    ll_sforming = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2) + np.log(np.power(1-fpass, -2)))
+    # passive likelihood ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Sigma2 = np.square(xerr2)*np.square((2*a1*x2) + a2) + np.square(yerr2) + np.exp(2*s2)
+    DeltaN = y2 - (a1*x2*x2) - (a2*x2) - a3 - dy
+    ll_passive = -0.5 * np.sum(DeltaN**2/Sigma2 + np.log(Sigma2) + np.log(np.power(fpass, -2)))
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    return ll_sforming + ll_passive + ll_passive_fraction + log_mainsequence_priors_full(params)
+
+
+def passive(GAMA, GAMA_pass, GAMA_sf):
     x = np.linspace(7.5,11.3,30)
     x2 = np.linspace(6,12,300)
     a = 10.804
@@ -700,6 +786,9 @@ def passive(GAMA_pass, GAMA_sf):
     fpassive_gradient = - (np.power(10,-a+x2)*b*(1-c)*np.log(10))/np.power((1+np.power(np.power(10,x2-a),b)),2)
     xnew, ratio, xerr, yerr = [], [], [], []
     global passive_data
+    global passive
+    global sforming
+    global GAMA_data
     for i in range(0, len(x) - 1):
         sf = GAMA_sf[GAMA_sf['logM*'] > x[i]]
         sf = sf[sf['logM*'] <= x[i+1]]
@@ -709,37 +798,59 @@ def passive(GAMA_pass, GAMA_sf):
         ratio.append(len(passive)/(len(sf)+len(passive)))
         xnew.append((x[i+1] + x[i])/2)
         xerr.append(0.01)
+    # global variables to pass to likelihood functions
     passive_data = xnew, ratio, xerr, xerr
-    ndim2, nwalkers2 = 3, 100
-    guess = [10.552, -0.983, -2.14]
-    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
-    pool = Pool(8)
-    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
-    sampler2.run_mcmc(pos, 1000, progress=True)
-    plot_samples(sampler2, ndim2, 'SFR_M*')
-    samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
-    plot_corner_passive(samples2, 'passive_fraction')
-
-
-    popt, pcov = curve_fit(f_passive, xnew, ratio, p0 = [10.804, -2.436, -1.621])
+    passive = GAMA_pass['logM*'], GAMA_pass['logSFR'], GAMA_pass['logM*err'], GAMA_pass['logSFRerr']
+    sforming = GAMA_sf['logM*'], GAMA_sf['logSFR'], GAMA_sf['logM*err'], GAMA_sf['logSFRerr']
+    GAMA_data = GAMA['logM*'], GAMA['logSFR'], GAMA['logM*err'], GAMA['logSFRerr']
+    print (sf[['logM*', 'logSFR']])
+    s = sf['logM*'].values
+    t = sf['logSFR'].values
+    print (s,t)
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
-    ax[0,0].plot(xnew, ratio, label = 'GAMA Binned Data', color = 'k')
-    ax[0,0].plot(x2, fpassive2, label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
-    # ax[0,0].plot(x2, fpassive_gradient/80.0, label = 'gradient')
-    ax[0,0].plot(x2, f_passive(x2, *popt), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'b')
-    # ax[0,0].text(7, 0.55, 'Bull+17: ' + str(a) + ' ' + str(b) + ' ' + str(zeta))
-    # ax[0,0].text(7, 0.5, 'GAMA: ' + str(round(popt[0],3)) + ' ' + str(round(popt[1],3)) + ' ' + str(round(popt[2],3)))
-    i = 0
-    for a, b, zeta in samples2[np.random.randint(len(samples2), size=100)]:
-        if i == 0:
-            ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g', label = 'emcee parameter estimation, GAMA data')
-        else:
-            ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g')
-        i+=1
-    ax[0,0].set_xlabel(r'$\mathrm{log \,M_{*}}$', fontsize = 20)
-    ax[0,0].set_ylabel(r'$\mathrm{f_{passive}}$', fontsize = 20)
-    plt.legend()
-    plt.savefig('img/passive_ratio.pdf')
+    ax[0,0].scatter(GAMA_sf['logM*'], GAMA_sf['logSFR'])
+    plt.savefig('img/sfrmplane_sf.pdf')
+    # passive fraction
+    # ndim2, nwalkers2 = 3, 100
+    # guess = [10.552, -0.983, -2.14]
+    # pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    # pool = Pool(2)
+    # sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
+    # sampler2.run_mcmc(pos, 1000, progress=True)
+    # plot_samples_passive(sampler2, ndim2, 'SFR_M*')
+    # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    # plot_corner_passive(samples2, 'passive_fraction')
+    # star forming galaxies
+    ndim, nwalkers = 9, 100
+    guess2 = [10.55, -0.99, -1.79, -0.07, 1.90, -12.35, -1.2, -0.9, -1.8]
+    pos = [guess2 + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    pool = Pool(2)
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_marg_mainsequence_full, pool = pool)
+    sampler.run_mcmc(pos, 1000, progress=True)
+    plot_samples_full(sampler, ndim, 'mainsequence_full')
+    # samples = sampler.chain[:, 500:, :].reshape((-1, ndim))
+    # plot_corner_blue(samples, 'blue')
+
+
+    # popt, pcov = curve_fit(f_passive, xnew, ratio, p0 = [10.804, -2.436, -1.621])
+    # fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
+    # ax[0,0].plot(xnew, ratio, label = 'GAMA Binned Data', color = 'k')
+    # ax[0,0].plot(x2, fpassive2, label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
+    # # ax[0,0].plot(x2, fpassive_gradient/80.0, label = 'gradient')
+    # ax[0,0].plot(x2, f_passive(x2, *popt), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'b')
+    # # ax[0,0].text(7, 0.55, 'Bull+17: ' + str(a) + ' ' + str(b) + ' ' + str(zeta))
+    # # ax[0,0].text(7, 0.5, 'GAMA: ' + str(round(popt[0],3)) + ' ' + str(round(popt[1],3)) + ' ' + str(round(popt[2],3)))
+    # i = 0
+    # for a, b, zeta in samples2[np.random.randint(len(samples2), size=100)]:
+    #     if i == 0:
+    #         ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g', label = 'emcee parameter estimation, GAMA data')
+    #     else:
+    #         ax[0,0].plot(x2,f_passive(x2, a, b, zeta), alpha = 0.1, color = 'g')
+    #     i+=1
+    # ax[0,0].set_xlabel(r'$\mathrm{log \,M_{*}}$', fontsize = 20)
+    # ax[0,0].set_ylabel(r'$\mathrm{f_{passive}}$', fontsize = 20)
+    # plt.legend()
+    # plt.savefig('img/passive_ratio.pdf')
     return ratio
 
 def MainSequence3():
@@ -750,7 +861,7 @@ def MainSequence3():
     grid = np.histogramdd(dd, bins=26)
     GAMA_pass = GAMA[GAMA['logSFR'] < (0.83*GAMA['logM*']) + -9.5]
     GAMA_sf = GAMA[GAMA['logSFR'] >= (0.83*GAMA['logM*']) + -9.5]
-    passive(GAMA_pass, GAMA_sf)
+    passive(GAMA, GAMA_pass, GAMA_sf)
     plot_SFR_M_plane2(GAMA)
 
 def MainSequence_slice():
@@ -1365,8 +1476,17 @@ def plot_corner(samples_input, fname):
     plt.savefig('img/corner/' + fname)
 
 def plot_corner_passive(samples_input, fname):
+    # samples_input[:, 6] = np.exp(samples_input[:, 6])
     corner.corner(samples_input, labels=[r"$\alpha$", r"$\beta$", r"$\zeta$"],
                   truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
+
+def plot_corner_blue(samples_input, fname):
+    samples_input[:, 3] = np.exp(samples_input[:, 3])
+    corner.corner(samples_input, labels=[r"$a1$", r"$a2$", r"$a3$", r"$lnf$"],
+                  truths=(np.median(samples_input[:, 0]), np.median(samples_input[:, 1]), np.median(samples_input[:, 2]), np.median(samples_input[:, 3])),
                   truth_color="k",
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('img/corner/' + fname)
