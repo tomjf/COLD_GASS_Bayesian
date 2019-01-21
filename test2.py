@@ -429,6 +429,8 @@ def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, samples):
     ax[0,0].set_xlabel(r'$\mathrm{log_{10}(M_{*})}$')
     ax[0,1].set_xlabel(r'$\mathrm{log_{10}(M_{*})}$')
     ax[0,0].set_ylabel(r'$\mathrm{log_{10}(SFR)}$')
+    ax[0,0].set_title('GAMA data')
+    ax[0,1].set_title('emcee')
     plt.legend()
     # plt.xlabel(r'$\mathrm{log_{10}(M_{*})}$')
     # plt.ylabel(r'$\mathrm{log_{10}(SFR)}$')
@@ -803,7 +805,7 @@ def log_mainsequence_priors_full(params):
     alpha, beta, zeta, a1, a2, a3, s1, b1, b2, s2 = params
     if 10.4 < alpha < 10.7 and \
     -1.2 < beta < -0.8 and \
-    -2.2 < zeta < -1.5 and \
+    -4.0 < zeta < -1.5 and \
     -1.0 < a1 < 1.0 and \
     0.0 < a2 < 5.0 and \
     -20.0 < a3 < -5.0 and \
@@ -846,6 +848,7 @@ def log_marg_mainsequence_full(params):
 
 def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     x = np.linspace(7.5,11.3,30)
+    x1 = np.linspace(6.0,11.3,42)
     x2 = np.linspace(6,12,300)
     a = 10.804
     b = -2.436
@@ -860,14 +863,20 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     global GAMA_data
     global GAMA_blue
     global GAMA_red
-    for i in range(0, len(x) - 1):
-        sf = GAMA_sf[GAMA_sf['logM*'] > x[i]]
-        sf = sf[sf['logM*'] <= x[i+1]]
-        passive = GAMA_pass[GAMA_pass['logM*'] > x[i]]
-        passive = passive[passive['logM*'] <= x[i+1]]
-        ratio.append(len(passive)/(len(sf)+len(passive)))
-        xnew.append((x[i+1] + x[i])/2)
-        xerr.append(0.01)
+    # NOTE: fixing the passive fraction to 0 below M* of 7.5 where data is not complete
+    for i in range(0, len(x1) - 1):
+        if x1[i] < 7.5:
+            ratio.append(0)
+            xnew.append((x1[i+1] + x1[i])/2)
+            xerr.append(0.001)
+        else:
+            sf = GAMA_sf[GAMA_sf['logM*'] > x1[i]]
+            sf = sf[sf['logM*'] <= x1[i+1]]
+            passive = GAMA_pass[GAMA_pass['logM*'] > x1[i]]
+            passive = passive[passive['logM*'] <= x1[i+1]]
+            ratio.append(len(passive)/(len(sf)+len(passive)))
+            xnew.append((x1[i+1] + x1[i])/2)
+            xerr.append(0.01)
     # global variables to pass to likelihood functions
     passive_data = xnew, ratio, xerr, xerr
     passive = GAMA_pass['logM*'], GAMA_pass['logSFR'], GAMA_pass['logM*err'], GAMA_pass['logSFRerr']
