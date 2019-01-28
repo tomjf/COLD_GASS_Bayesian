@@ -758,18 +758,18 @@ def f_passive(x, a, b, zeta):
 
 def log_passive_fraction_priors(params):
     alpha, beta, zeta = params
-    if 10.0 < alpha < 11.0 and -3.0 < beta < -0.2 and -3.0 < zeta < -1.0:
+    if 10.0 < alpha < 11.0 and -3.0 < beta < -0.2 and -8.0 < zeta < -.1:
         return 0.0
     return -np.inf
 
 def log_marg_passive(params):
     alpha, beta, zeta = params
-    x, y, xerr, yerr = passive_data
+    x, y, yerr = passive_data
     # passive fraction likelihood
     c = .5*(1+np.tanh(zeta))
     m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
     m = m*np.power(10,x)
-    Sigma2 = np.square(xerr*m) + np.square(yerr)
+    Sigma2 = np.square(yerr)
     Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
     ll_passive_fraction = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
 
@@ -805,9 +805,9 @@ def log_marg_mainsequence(params):
 
 def log_mainsequence_priors_full(params):
     alpha, beta, zeta, a1, a2, a3, s1, b1, b2, s2, c1, c2, lnf3, d1, d2, lnf4, = params
-    if 10.4 < alpha < 10.7 and \
-    -1.2 < beta < -0.8 and \
-    -8.0 < zeta < -1.5 and \
+    if 8.0 < alpha < 10.7 and \
+    -2.0 < beta < -0.8 and \
+    -8.0 < zeta < -0.5 and \
     -1.0 < a1 < 1.0 and \
     0.0 < a2 < 5.0 and \
     -20.0 < a3 < -5.0 and \
@@ -832,7 +832,7 @@ def log_marg_mainsequence_full(params):
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # read in the data
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    x, y, xerr, yerr = passive_data
+    x, y, yerr = passive_data
     xb, yb, xerrb, yerrb = sforming
     xr, yr, xerrr, yerrr = passive
     CGx1, CGx2, CGy1, CGy2, CGS1, CGS2 = COLD_GASS_data
@@ -876,7 +876,7 @@ def log_marg_mainsequence_full(params):
     c = .5*(1+np.tanh(zeta))
     m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
     m = m*np.power(10,x)
-    Sigma2 = np.square(xerr*m) + np.square(yerr)
+    Sigma2 = np.square(yerr)
     Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
     ll_passive_fraction = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
     fpass_b = f_passive(xb, alpha, beta, zeta)
@@ -896,11 +896,98 @@ def log_marg_mainsequence_full(params):
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     return ll_SFR_MHI + ll_SFR_MH2 + ll_sforming + ll_passive + ll_passive_fraction + log_mainsequence_priors_full(params)
 
+def bootstrap_GAMA(GAMAb, GAMAr, frac, n):
+    x1 = np.linspace(6.0,11.3,42)
+    data = np.zeros((n, len(x1) + 7))
+    blue = GAMAb['logM*'].values
+    red = GAMAr['logM*'].values
+    print (type(blue))
+    # index_blue = np.linspace(0,len(GAMAb['logM*'])-1,len(GAMAb['logM*']))
+    # index_red = np.linspace(0,len(GAMAr['logM*'])-1,len(GAMAr['logM*']))
+    lim_index_blue = int(len(blue)*frac)
+    print (lim_index_blue)
+    lim_index_red = int(len(red)*frac)
+    for j in range (0, n):
+        # randomly select a fraction of the data
+        # first randomly shuffle the original data so the order is always different
+        np.random.shuffle(blue)
+        np.random.shuffle(red)
+        # select a fraction of the data
+        blue_shuffled = blue[:lim_index_blue]
+        red_shuffled = red[:lim_index_red]
+        ratio, xnew = [], []
+        for i in range(0, len(x1) - 1):
+            if x1[i] < 7.5:
+                ratio.append(np.random.normal(0, 0.01))
+                xnew.append((x1[i+1] + x1[i])/2)
+            else:
+                sf = blue_shuffled[blue_shuffled > x1[i]]
+                sf = sf[sf <= x1[i+1]]
+                passive = red_shuffled[red_shuffled > x1[i]]
+                passive = passive[passive <= x1[i+1]]
+                ratio.append(len(passive)/(len(sf)+len(passive)))
+                xnew.append((x1[i+1] + x1[i])/2)
+            if x1[i] >= 11.5:
+                ratio.append(np.random.normal(0, 0.01))
+                xnew.append((x1[i+1] + x1[i])/2)
+        xnew.append(11.25)
+        xnew.append(11.5)
+        xnew.append(11.75)
+        xnew.append(12.0)
+        xnew.append(12.25)
+        xnew.append(12.5)
+        xnew.append(12.75)
+        xnew.append(13.0)
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        ratio.append(np.random.normal(1.0, 0.01))
+        data[j,:] = ratio
+    std = []
+    for idx in range(0, len(x1) + 7):
+        std.append(np.std(data[:,idx]))
+    # bootstrap for the original full dataset
+    xnew, ratio = [], []
+    for i in range(0, len(x1) - 1):
+        if x1[i] < 7.5:
+            ratio.append(0)
+            xnew.append((x1[i+1] + x1[i])/2)
+        else:
+            sf = blue[blue > x1[i]]
+            sf = sf[sf <= x1[i+1]]
+            passive = red[red > x1[i]]
+            passive = passive[passive <= x1[i+1]]
+            ratio.append(len(passive)/(len(sf)+len(passive)))
+            xnew.append((x1[i+1] + x1[i])/2)
+    xnew.append(11.25)
+    xnew.append(11.5)
+    xnew.append(11.75)
+    xnew.append(12.0)
+    xnew.append(12.25)
+    xnew.append(12.5)
+    xnew.append(12.75)
+    xnew.append(13.0)
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    ratio.append(np.random.normal(1.0, 0.01))
+    print (type(xnew), np.shape(xnew))
+    print (type(ratio), np.shape(ratio))
+    print (type(std), np.shape(std))
+    return xnew, std, ratio
 
 def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     x = np.linspace(7.5,11.3,30)
     x1 = np.linspace(6.0,11.3,42)
-    x2 = np.linspace(6,12,300)
+    x2 = np.linspace(6,13,300)
     a = 10.804
     b = -2.436
     zeta = -1.621
@@ -915,21 +1002,31 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     global GAMA_blue
     global GAMA_red
     # NOTE: fixing the passive fraction to 0 below M* of 7.5 where data is not complete
-    for i in range(0, len(x1) - 1):
-        if x1[i] < 7.5:
-            ratio.append(0)
-            xnew.append((x1[i+1] + x1[i])/2)
-            xerr.append(0.001)
-        else:
-            sf = GAMA_sf[GAMA_sf['logM*'] > x1[i]]
-            sf = sf[sf['logM*'] <= x1[i+1]]
-            passive = GAMA_pass[GAMA_pass['logM*'] > x1[i]]
-            passive = passive[passive['logM*'] <= x1[i+1]]
-            ratio.append(len(passive)/(len(sf)+len(passive)))
-            xnew.append((x1[i+1] + x1[i])/2)
-            xerr.append(0.01)
+    # for i in range(0, len(x1) - 1):
+    #     if x1[i] < 7.5:
+    #         ratio.append(0)
+    #         xnew.append((x1[i+1] + x1[i])/2)
+    #         xerr.append(0.001)
+    #     else:
+    #         sf = GAMA_sf[GAMA_sf['logM*'] > x1[i]]
+    #         sf = sf[sf['logM*'] <= x1[i+1]]
+    #         passive = GAMA_pass[GAMA_pass['logM*'] > x1[i]]
+    #         passive = passive[passive['logM*'] <= x1[i+1]]
+    #         ratio.append(len(passive)/(len(sf)+len(passive)))
+    #         xnew.append((x1[i+1] + x1[i])/2)
+    #         xerr.append(0.05)
+    # ratio.append(1)
+    # xnew.append(11.5)
+    # xerr.append(0.001)
+    # ratio.append(1)
+    # xnew.append(12.0)
+    # xerr.append(0.001)
+    # ratio.append(1)
+    # xnew.append(12.5)
+    # xerr.append(0.001)
+    xnew, std, ratio = bootstrap_GAMA(GAMAb, GAMAr, 0.5, 1000)
     # global variables to pass to likelihood functions
-    passive_data = xnew, ratio, xerr, xerr
+    passive_data = xnew, ratio, std
     passive = GAMA_pass['logM*'], GAMA_pass['logSFR'], GAMA_pass['logM*err'], GAMA_pass['logSFRerr']
     sforming = GAMA_sf['logM*'], GAMA_sf['logSFR'], GAMA_sf['logM*err'], GAMA_sf['logSFRerr']
     # print ('starforming', sforming)
@@ -937,23 +1034,23 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     GAMA_blue = GAMAb['logM*'], GAMAb['logSFR'], GAMAb['logM*err'], GAMAb['logSFRerr']
     GAMA_red = GAMAr['logM*'], GAMAr['logSFR'], GAMAr['logM*err'], GAMAr['logSFRerr']
     # print (sf[['logM*', 'logSFR']])
-    s = sf['logM*'].values
-    t = sf['logSFR'].values
+    # s = sf['logM*'].values
+    # t = sf['logSFR'].values
     # print (s,t)
     # fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
     # ax[0,0].scatter(GAMA_sf['logM*'], GAMA_sf['logSFR'])
     # plt.savefig('img/sfrmplane_sf.pdf')
 
-    # # passive fraction
-    # ndim2, nwalkers2 = 3, 100
-    # guess = [10.552, -0.983, -1.79]
-    # pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
-    # pool = Pool(2)
-    # sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
-    # sampler2.run_mcmc(pos, 5000, progress=True)
-    # plot_samples_passive(sampler2, ndim2, 'SFR_M*')
-    # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
-    # plot_corner_passive(samples2, 'passive_fraction')
+    # passive fraction
+    ndim2, nwalkers2 = 3, 100
+    guess = [10.552, -0.983, -1.79]
+    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    pool = Pool(2)
+    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
+    sampler2.run_mcmc(pos, 5000, progress=True)
+    plot_samples_passive(sampler2, ndim2, 'SFR_M*')
+    samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    plot_corner_passive(samples2, 'passive_fraction')
     #
     # # star forming galaxies and red cloud galaxies
     # ndim3, nwalkers3 = 7, 100
@@ -980,19 +1077,22 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     pool = Pool(2)
     sampler3 = emcee.EnsembleSampler(nwalkers, ndim, log_marg_mainsequence_full, pool = pool)
-    sampler3.run_mcmc(pos, 1500, progress=True)
+    sampler3.run_mcmc(pos, 2000, progress=True)
     plot_samples_full(sampler3, ndim, 'mainsequence_full')
-    samples3 = sampler3.chain[:, 1000:, :].reshape((-1, ndim))
+    samples3 = sampler3.chain[:, 1500:, :].reshape((-1, ndim))
     samples = np.copy(samples3)
     print (np.shape(samples3))
     plot_corner_full(samples3, 'ms_full')
 
+
+
     popt, pcov = curve_fit(f_passive, xnew, ratio, p0 = [10.804, -2.436, -1.621])
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
-    ax[0,0].plot(xnew, ratio, label = 'GAMA Binned Data', color = 'k')
-    ax[0,0].plot(x2, fpassive2, label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
+    ax[0,0].errorbar(xnew, ratio, yerr = std, label = 'GAMA Binned Data', color = 'k', fmt = 'o')
+    # ax[0,0].plot(x2, f_passive(x2, 10.804, -2.436, -1.621), label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
     # ax[0,0].plot(x2, fpassive_gradient/80.0, label = 'gradient')
     ax[0,0].plot(x2, f_passive(x2, *popt), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'b')
+    # ax[0,0].plot(x2, 1/(np.power(np.power(10, x2)/np.power(10,10.2), -1.3) + 1), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'c')
     # ax[0,0].text(7, 0.55, 'Bull+17: ' + str(a) + ' ' + str(b) + ' ' + str(zeta))
     # ax[0,0].text(7, 0.5, 'GAMA: ' + str(round(popt[0],3)) + ' ' + str(round(popt[1],3)) + ' ' + str(round(popt[2],3)))
     i = 0
@@ -1004,8 +1104,10 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
         i+=1
     ax[0,0].set_xlabel(r'$\mathrm{log \,M_{*}}$', fontsize = 20)
     ax[0,0].set_ylabel(r'$\mathrm{f_{passive}}$', fontsize = 20)
+    plt.xlim(6,13)
     plt.legend()
     plt.savefig('img/passive_ratio.pdf')
+
     return ratio, samples
 
 def MainSequence3():
@@ -1050,10 +1152,10 @@ def MainSequence3():
     GASS_data = x1, x2, y1, y2, S1, S2
     ALFALFA_data = MHI, phi_alfa, phi_err_alfa
     # function to fit the GAMA data and estimate passive fraction
-    # ratio, samples3 = passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf)
+    ratio, samples3 = passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf)
     # # save the converged chain
-    # np.savetxt('data/converged.txt', samples3, delimiter = ',')
-    samples3 = np.loadtxt('data/converged.txt', delimiter = ',')
+    np.savetxt('data/converged.txt', samples3, delimiter = ',')
+    # samples3 = np.loadtxt('data/converged.txt', delimiter = ',')
     print (np.shape(samples3))
     samples3[:,6] = np.exp(samples3[:,6])
     samples3[:,9] = np.exp(samples3[:,9])
