@@ -374,10 +374,12 @@ def predict_dist(a1, a2, a3, lnf, M, N):
     return data
 
 
-def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, samples):
-    fig, ax = plt.subplots(nrows = 1, ncols = 2, squeeze=False, figsize=(12,6))
-    h, xedges_b, yedges_b, image_b = ax[0,0].hist2d(GAMAb['logM*'], GAMAb['logSFR'], cmap = 'Blues', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300)
-    h, xedges_r, yedges_r, image_r = ax[0,0].hist2d(GAMAr['logM*'], GAMAr['logSFR'], cmap = 'Reds', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300)
+def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, GAMA_sf, GAMA_pass, samples):
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, squeeze=False, figsize=(18,6))
+    # h, xedges_b, yedges_b, image_b = ax[0,2].hist2d(GAMAb['logM*'], GAMAb['logSFR'], cmap = 'Blues', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300, alpha = 0.3)
+    # h, xedges_r, yedges_r, image_r = ax[0,2].hist2d(GAMAr['logM*'], GAMAr['logSFR'], cmap = 'Reds', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300, alpha = 0.3)
+    h, xedges_b, yedges_b, image_b = ax[0,0].hist2d(GAMA_sf['logM*'], GAMA_sf['logSFR'], cmap = 'Blues', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300, alpha = 0.3)
+    h, xedges_r, yedges_r, image_r = ax[0,0].hist2d(GAMA_pass['logM*'], GAMA_pass['logSFR'], cmap = 'Reds', bins = 30, label = 'GAMA data', cmin = 1, cmax = 300, alpha = 0.3)
     x0=np.linspace(7,12,300)
     ax[0,0].plot(x0, (0.83*x0) + -9.5)
     ax[0,1].plot(x0, (0.83*x0) + -9.5)
@@ -386,7 +388,8 @@ def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, samples):
         ax[0,0].plot(x0, b1*x0 + b2, lw=1, alpha=0.1, color="r")
         ax[0,1].plot(x0, a1*x0*x0 + a2*x0 + a3, lw=1, alpha=0.1, color="b")
         ax[0,1].plot(x0, b1*x0 + b2, lw=1, alpha=0.1, color="r")
-        print (alpha, beta, zeta, a1, a2, a3, lnf, b1, b2, lnf2, c1, c2, lnf3, d1, d2, lnf4 )
+        # ax[0,2].plot(x0, a1*x0*x0 + a2*x0 + a3, lw=1, alpha=0.1, color="b")
+        # ax[0,2].plot(x0, b1*x0 + b2, lw=1, alpha=0.1, color="r")
     # for a1, a2, a3, lnf, b1, b2, lnf2 in samples2[np.random.randint(len(samples2), size=10)]:
     #     print (a1, a2, a3)
     #     ax[0,0].plot(x0, a1*x0*x0 + a2*x0 + a3, lw=1, alpha=0.1, color="g")
@@ -420,8 +423,8 @@ def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, samples):
     blue = predict_dist(a1, a2, a3, lnf, M, N_blue)
     red = predict_dist(0, b1, b2, lnf2, M, N_red)
     #
-    hb, xedges_b, yedges_b, image_b = ax[0,1].hist2d(blue[:,0], blue[:,1], cmap = 'Blues', bins = [xedges_b, yedges_b], label = 'GAMA data', cmin = 1, cmax = 1000)
-    hr, xedges_r, yedges_r, image_r  = ax[0,1].hist2d(red[:,0], red[:,1], cmap = 'Reds', bins = [xedges_r, yedges_r], label = 'GAMA data', cmin = 1, cmax = 1000)
+    hb, xedges_b, yedges_b, image_b = ax[0,1].hist2d(blue[:,0], blue[:,1], cmap = 'Blues', bins = [xedges_b, yedges_b], label = 'GAMA data', cmin = 1, cmax = 1000, alpha = 0.3)
+    hr, xedges_r, yedges_r, image_r  = ax[0,1].hist2d(red[:,0], red[:,1], cmap = 'Reds', bins = [xedges_r, yedges_r], label = 'GAMA data', cmin = 1, cmax = 1000, alpha = 0.3)
     # ax[0,1].contour(hr, extent = [xedges_r.min(), xedges_r.max(), yedges_r.min(), yedges_r.max()], linewidths = 1)
     # ax[0,1].contour(hb, extent = [xedges_b.min(), xedges_b.max(), yedges_b.min(), yedges_b.max()], linewidths = 1)
     ax[0,0].set_ylim(-3.5,1.5)
@@ -433,6 +436,7 @@ def plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, samples):
     ax[0,0].set_ylabel(r'$\mathrm{log_{10}(SFR)}$')
     ax[0,0].set_title('GAMA data')
     ax[0,1].set_title('emcee')
+    # ax[0,2].set_title('colour cut')
     plt.legend()
     # plt.xlabel(r'$\mathrm{log_{10}(M_{*})}$')
     # plt.ylabel(r'$\mathrm{log_{10}(SFR)}$')
@@ -758,7 +762,7 @@ def f_passive(x, a, b, zeta):
 
 def log_passive_fraction_priors(params):
     alpha, beta, zeta = params
-    if 10.0 < alpha < 11.0 and -3.0 < beta < -0.2 and -8.0 < zeta < -.1:
+    if 5.0 < alpha < 11.0 and -3.0 < beta < -0.2 and -4.0 < zeta < -.1:
         return 0.0
     return -np.inf
 
@@ -806,8 +810,8 @@ def log_marg_mainsequence(params):
 def log_mainsequence_priors_full(params):
     alpha, beta, zeta, a1, a2, a3, s1, b1, b2, s2, c1, c2, lnf3, d1, d2, lnf4, = params
     if 8.0 < alpha < 10.7 and \
-    -2.0 < beta < -0.8 and \
-    -8.0 < zeta < -0.5 and \
+    -2.0 < beta < -0.1 and \
+    -8.0 < zeta < -0.1 and \
     -1.0 < a1 < 1.0 and \
     0.0 < a2 < 5.0 and \
     -20.0 < a3 < -5.0 and \
@@ -835,6 +839,8 @@ def log_marg_mainsequence_full(params):
     x, y, yerr = passive_data
     xb, yb, xerrb, yerrb = sforming
     xr, yr, xerrr, yerrr = passive
+    # xb, yb, xerrb, yerrb = GAMA_blue
+    # xr, yr, xerrr, yerrr = GAMA_red
     CGx1, CGx2, CGy1, CGy2, CGS1, CGS2 = COLD_GASS_data
     x1, x2, y1, y2, S1, S2 = GASS_data
     MHI, phi_alfa, phi_err_alfa = ALFALFA_data
@@ -874,13 +880,13 @@ def log_marg_mainsequence_full(params):
     # passive fraction likelihood
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     c = .5*(1+np.tanh(zeta))
-    m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
-    m = m*np.power(10,x)
+    # m = -(np.power(10,-alpha)*beta*(1-c)*np.power((np.power(10,x-alpha)),-1+beta))/(1+np.power(np.power(np.power(10,x-alpha),beta),2))
+    # m = m*np.power(10,x)
     Sigma2 = np.square(yerr)
     Delta = y - (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
     ll_passive_fraction = -0.5 * np.sum(Delta**2 / Sigma2 + np.log(Sigma2))
-    fpass_b = f_passive(xb, alpha, beta, zeta)
-    fpass_r = f_passive(xr, alpha, beta, zeta)
+    # fpass_b = f_passive(xb, alpha, beta, zeta)
+    # fpass_r = f_passive(xr, alpha, beta, zeta)
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # star forming likelihood
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -897,10 +903,12 @@ def log_marg_mainsequence_full(params):
     return ll_SFR_MHI + ll_SFR_MH2 + ll_sforming + ll_passive + ll_passive_fraction + log_mainsequence_priors_full(params)
 
 def bootstrap_GAMA(GAMAb, GAMAr, frac, n):
-    x1 = np.linspace(6.0,11.3,42)
+    blue = np.copy(GAMAb['logM*'].values)
+    red = np.copy(GAMAr['logM*'].values)
+    x1 = np.linspace(6.0,11.3,40)
     data = np.zeros((n, len(x1) + 7))
-    blue = GAMAb['logM*'].values
-    red = GAMAr['logM*'].values
+    # blue = GAMAb['logM*'].values
+    # red = GAMAr['logM*'].values
     print (type(blue))
     # index_blue = np.linspace(0,len(GAMAb['logM*'])-1,len(GAMAb['logM*']))
     # index_red = np.linspace(0,len(GAMAr['logM*'])-1,len(GAMAr['logM*']))
@@ -985,6 +993,7 @@ def bootstrap_GAMA(GAMAb, GAMAr, frac, n):
     return xnew, std, ratio
 
 def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
+    # GAMAb, GAMAr from colour cut, GAMA_pass, GAMA_sf from SFRM cut
     x = np.linspace(7.5,11.3,30)
     x1 = np.linspace(6.0,11.3,42)
     x2 = np.linspace(6,13,300)
@@ -1024,9 +1033,12 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     # ratio.append(1)
     # xnew.append(12.5)
     # xerr.append(0.001)
-    xnew, std, ratio = bootstrap_GAMA(GAMAb, GAMAr, 0.5, 1000)
+    # xnew, std, ratio = bootstrap_GAMA(GAMAb, GAMAr, 0.5, 1000)
+    xnew, std, ratio = bootstrap_GAMA(GAMA_sf, GAMA_pass, 0.5, 1000)
+    scatterplot(GAMA_sf, GAMA_pass)
     # global variables to pass to likelihood functions
     passive_data = xnew, ratio, std
+    print (xnew, ratio, std)
     passive = GAMA_pass['logM*'], GAMA_pass['logSFR'], GAMA_pass['logM*err'], GAMA_pass['logSFRerr']
     sforming = GAMA_sf['logM*'], GAMA_sf['logSFR'], GAMA_sf['logM*err'], GAMA_sf['logSFRerr']
     # print ('starforming', sforming)
@@ -1041,16 +1053,16 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     # ax[0,0].scatter(GAMA_sf['logM*'], GAMA_sf['logSFR'])
     # plt.savefig('img/sfrmplane_sf.pdf')
 
-    # passive fraction
-    ndim2, nwalkers2 = 3, 100
-    guess = [10.552, -0.983, -1.79]
-    pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
-    pool = Pool(2)
-    sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
-    sampler2.run_mcmc(pos, 5000, progress=True)
-    plot_samples_passive(sampler2, ndim2, 'SFR_M*')
-    samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
-    plot_corner_passive(samples2, 'passive_fraction')
+    # # passive fraction
+    # ndim2, nwalkers2 = 3, 100
+    # guess = [10.552, -0.983, -1.79]
+    # pos = [guess + 1e-4*np.random.randn(ndim2) for i in range(nwalkers2)]
+    # pool = Pool(2)
+    # sampler2 = emcee.EnsembleSampler(nwalkers2, ndim2, log_marg_passive, pool = pool)
+    # sampler2.run_mcmc(pos, 2000, progress=True)
+    # plot_samples_passive(sampler2, ndim2, 'SFR_M*')
+    # samples2 = sampler2.chain[:, 500:, :].reshape((-1, ndim2))
+    # plot_corner_passive(samples2, 'passive_fraction')
     #
     # # star forming galaxies and red cloud galaxies
     # ndim3, nwalkers3 = 7, 100
@@ -1065,7 +1077,7 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
 
     # total fit
     ndim, nwalkers = 16, 100
-    g_passive_frac = [10.51, -0.92, -5.43]
+    g_passive_frac = [10.42, -1.18, -2.09]
     g_blue = [-0.06, 1.81, -11.84, -1.1]
     g_red = [.64, -8.23, -1.1]
     g_MHI = [0.87, 9.47, -0.75]
@@ -1088,7 +1100,8 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
 
     popt, pcov = curve_fit(f_passive, xnew, ratio, p0 = [10.804, -2.436, -1.621])
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(8,8))
-    ax[0,0].errorbar(xnew, ratio, yerr = std, label = 'GAMA Binned Data', color = 'k', fmt = 'o')
+    ax[0,0].errorbar(xnew, ratio, yerr = std, label = 'GAMA colour cut', color = 'k', fmt = 'o')
+    # ax[0,0].errorbar(xnew2, ratio2, yerr = std2, label = 'GAMA SFRM cut', color = 'r', fmt = 'o')
     # ax[0,0].plot(x2, f_passive(x2, 10.804, -2.436, -1.621), label = 'Bull+17 Eqn 8, Bull+17', color = 'r')
     # ax[0,0].plot(x2, fpassive_gradient/80.0, label = 'gradient')
     ax[0,0].plot(x2, f_passive(x2, *popt), label = 'Bull+17 Eqn 8, ML fit GAMA data', color = 'b')
@@ -1109,6 +1122,12 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     plt.savefig('img/passive_ratio.pdf')
 
     return ratio, samples
+
+def scatterplot(GAMA_sf, GAMA_pass):
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
+    ax[0,0].scatter(GAMA_pass['logM*'],GAMA_pass['logSFR'], color = 'r', s = 0.1)
+    ax[0,0].scatter(GAMA_sf['logM*'],GAMA_sf['logSFR'], color = 'b', s = 0.1)
+    plt.savefig('img/scatterplot.pdf')
 
 def MainSequence3():
     # read in the GAMA data for z<0.08
@@ -1162,7 +1181,7 @@ def MainSequence3():
     samples3[:,12] = np.exp(samples3[:,12])
     samples3[:,15] = np.exp(samples3[:,15])
     # plot the gama data and the first to passive and star forming galaxies
-    plot_SFR_M_plane2(GAMA, GAMA_sf, GAMA_pass, samples3)
+    plot_SFR_M_plane2(GAMA, GAMAb, GAMAr, GAMA_sf, GAMA_pass, samples3)
     # calculate the MHI mass function
     MHI_hist2(20, 20, samples3, 'img/MHI_hist_passive.pdf')
 
