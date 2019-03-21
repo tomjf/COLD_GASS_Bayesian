@@ -631,6 +631,7 @@ def read_GAMA():
     GAMA = GAMA[GAMA['logSFR']>-3.5]
     GAMAb = GAMA[GAMA['ColorFlag']==1]
     GAMAr = GAMA[GAMA['ColorFlag']==2]
+
     return GAMA, GAMAb, GAMAr
 
 def MainSequence():
@@ -1092,6 +1093,13 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     sampler3.run_mcmc(pos, 2000, progress=True)
     plot_samples_full(sampler3, ndim, 'mainsequence_full')
     samples3 = sampler3.chain[:, 1500:, :].reshape((-1, ndim))
+    alpha_mcmc, beta_mcmc, zeta_mcmc, a1_mcmc, a2_mcmc, a3_mcmc, s1_mcmc, b1_mcmc, \
+    b2_mcmc, s2_mcmc, c1_mcmc, c2_mcmc, lnf3_mcmc, d1_mcmc, d2_mcmc, lnf4_mcmc = \
+    map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),zip(*np.percentile(samples3, [16, 50, 84], axis=0)))
+    print (a1_mcmc)
+    print (a2_mcmc)
+    print (a3_mcmc)
+    print (s1_mcmc)
     samples = np.copy(samples3)
     print (np.shape(samples3))
     plot_corner_full(samples3, 'ms_full')
@@ -1117,6 +1125,7 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
         i+=1
     ax[0,0].set_xlabel(r'$\mathrm{log \,M_{*}}$', fontsize = 20)
     ax[0,0].set_ylabel(r'$\mathrm{f_{passive}}$', fontsize = 20)
+
     plt.xlim(6,13)
     plt.legend()
     plt.savefig('img/passive_ratio.pdf')
@@ -1124,9 +1133,26 @@ def passive(GAMA, GAMAb, GAMAr, GAMA_pass, GAMA_sf):
     return ratio, samples
 
 def scatterplot(GAMA_sf, GAMA_pass):
-    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
-    ax[0,0].scatter(GAMA_pass['logM*'],GAMA_pass['logSFR'], color = 'r', s = 0.1)
-    ax[0,0].scatter(GAMA_sf['logM*'],GAMA_sf['logSFR'], color = 'b', s = 0.1)
+    a1 = -0.06460367725824073
+    a2 = 1.8117141009220101
+    a3 = -11.823265404592384
+    sigma1 = np.exp(-1.101023397746591)
+    binsy = np.linspace(-3.5,1.5,50)
+    binsx = np.linspace(7,12,50)
+    fig, ax = plt.subplots(nrows = 1, ncols = 3, squeeze=False, figsize=(18,6))
+    # ax[0,0].scatter(GAMA_pass['logM*'],GAMA_pass['logSFR'], color = 'r', s = 0.1)
+    # ax[0,0].scatter(GAMA_sf['logM*'], GAMA_sf['logSFR'], color = 'b', s = 0.1)
+    h, xedges, yedges, image = ax[0,0].hist2d(GAMA_sf['logM*'], GAMA_sf['logSFR'], bins = [binsx, binsy], cmin = 0, cmax = 80)
+    mean_SFR = (a1 * GAMA_sf['logM*'] * GAMA_sf['logM*']) + (a2 * GAMA_sf['logM*']) + a3
+    model = mean_SFR + np.random.normal(0, sigma1, len(GAMA_sf['logM*']))
+    # ax[0,1].scatter(GAMA_sf['logM*'], model, color = 'k', s = 0.1)
+    h2, xedges2, yedges2, image2 = ax[0,1].hist2d(GAMA_sf['logM*'], model, bins = [binsx, binsy], cmin = 0, cmax = 80)
+    print (h2-h)
+    ax[0,2].imshow(h2-h, origin = 'upper', vmin = 0, vmax = 10)
+    # ax[0,0].set_ylim(-3.5,1.5)
+    # ax[0,1].set_ylim(-3.5,1.5)
+    # ax[0,0].grid(True)
+    # ax[0,1].grid(True)
     plt.savefig('img/scatterplot.pdf')
 
 def MainSequence3():
