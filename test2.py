@@ -1650,6 +1650,11 @@ def MH2_hist2(n, N, chain, fname):
     # MH22, phi_alfa2, phi_err_alfa2 = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
     # print (ALFAALFA2)
     MH2 = np.linspace(6,10.5,20)
+    Mstar1, phistar1, alpha1 = 9.35, 4.29E-3, -1.03
+    Mstar2, phistar2, alpha2 = 9.26, 5.12E-3, -0.64
+
+    phi1 = np.log(10) * np.exp(-np.power(10,MH2-Mstar1)) * (phistar1*np.power(10,(alpha1+1)*(MH2-Mstar1)))
+    phi2 = np.log(10) * np.exp(-np.power(10,MH2-Mstar2)) * (phistar2*np.power(10,(alpha2+1)*(MH2-Mstar2)))
 
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
     # MH2 = np.linspace(5,12,n)
@@ -1664,10 +1669,14 @@ def MH2_hist2(n, N, chain, fname):
 
 
     for i in range(0,N):
-        ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g')
+        if i == 0:
+            ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g', label = 'This work')
+        else:
+            ax[0,0].plot(MH2, best_fits[i,:], alpha = 0.1, color = 'g')
         # ax[0,0].plot(MH2, best_fits2[i,:], alpha = 0.1, color = 'b')
         # ax[0,0].plot(MH2, best_fits3[i,:], alpha = 0.1, color = 'r')
-
+    ax[0,0].plot(MH2, np.log10(phi1), color = 'r', label = 'COLD GASS detections and non-detections')
+    ax[0,0].plot(MH2, np.log10(phi2), color = 'b', label = 'COLD GASS detections only')
     # y2 = log_schechter_true(MH2, 4.8E-3*(0.7**3), 9.96+(2*np.log10(0.7)), -1.33)
     # y3 = log_schechter_true(MH2, 4.8E-3, 9.96, -1.33)
     # ax[0,0].plot(MH2, np.log10(y2), color = 'k')
@@ -1681,6 +1690,7 @@ def MH2_hist2(n, N, chain, fname):
     ax[0,0].set_ylabel(r'$\rm log \,\phi(M_{H2}) \, [Mpc^{-3}]$')
     ax[0,0].set_ylim(-6,0)
     ax[0,0].set_xlim(6.5,10.5)
+    plt.legend()
     plt.tight_layout()
     plt.savefig(fname)
 
@@ -2072,8 +2082,8 @@ def test_schechter():
     plt.savefig('img/test_schechter.pdf')
 
 ## MAIN ########################################################################
-random.seed(42)
-MainSequence3()
+# random.seed(42)
+# MainSequence3()
 # MainSequence_slice()
 # doubleschec(7, 11.5)
 # MainSequence()
@@ -2090,7 +2100,7 @@ MainSequence3()
 # chain = all_fits()
 # chain = np.savetxt('converged_no_constraint3.txt', chain)
 #
-# chain = np.loadtxt('converged.txt')
+chain = np.loadtxt('converged.txt')
 # chain2 = np.loadtxt('converged_no_constraint.txt')
 # chain3 = np.loadtxt('converged_no_constraint3.txt')
 # plot_corner4(chain3, 'no_constraint2.pdf')
@@ -2099,7 +2109,7 @@ MainSequence3()
 # print (a1)
 # print (params)
 # MHI_hist2(20, 10, chain, chain2, chain3, 'img/MHI3_hist.pdf')
-# MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
+MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
 
 
 # SFRM_plane()

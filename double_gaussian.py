@@ -11,6 +11,7 @@ from scipy.optimize import curve_fit
 import matplotlib as mpl
 mpl.use('TkAgg')
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import random
 from scipy.optimize import minimize
@@ -28,6 +29,13 @@ os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
+
+def plane(x, y, params):
+    a = params[0]
+    b = params[1]
+    c = params[2]
+    z = a*x + b*y + c
+    return z
 
 def log_schechter_true(logL, log_phi, log_L0, alpha):
     # print (log_phi, log_L0, alpha)
@@ -89,6 +97,21 @@ def integrand_SFR(M, SFR, *params):
     # return phi_SFR
     return phi_Mstar_double*P_SFR_given_Mstar_total
 
+def integrand_MHI_direct(M, MHI, *params):
+    # parameters inferred from emcee
+    a1, a2, lna = params
+
+    Mstar = 10.78
+    phistar1 = 2.93E-3
+    phistar2 = 0.63E-3
+    alpha1 = - 0.62
+    alpha2 = - 1.50
+    # probabilities
+    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
+    P_MHI_given_Mstar = (1/np.sqrt(2*np.pi*np.power(np.exp(lna),2)))*np.exp((-1/(2*np.power(np.exp(lna),2)))*np.power((MHI - ((a1*M) + a2)),2))
+    # P_SFR_total
+    return phi_Mstar_double*P_MHI_given_Mstar
+
 def integrand_SFR_blue(M, SFR, *params):
     # parameters inferred from emcee
     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
@@ -149,9 +172,13 @@ def read_GASS():
     xxGASS = fits.open('data/xxGASS_MASTER_CO_170620_final.fits')
     xxGASS = Table(xxGASS[1].data).to_pandas()
     xxGASS = xxGASS[xxGASS['SFR_best'] > -80]
-    data = xxGASS[['SFR_best', 'lgMHI', 'SFRerr_best', 'HIsrc']]
+    # print (xxGASS.columns)
+    # print (xxGASS[['HIar_flag', 'Gdcode', 'GASSDR', 'zHI', 'W50cor', 'lgMHI_old', 'lgMHI', 'lgGF', 'HIconf_flag']])
+    data = xxGASS[['SFR_best', 'lgMHI', 'lgMstar', 'SFRerr_best', 'HIsrc', 'HIconf_flag']]
     det = data[data['HIsrc']!=4]
     nondet = data[data['HIsrc']==4]
+    det = data[data['HIconf_flag']==0]
+    nondet = data[data['HIconf_flag']==-99]
     det['SFRerr_best'] = det['SFRerr_best']/(det['SFR_best']*np.log(10))
     det['SFR_best'] = np.log10(det['SFR_best'])
     nondet['SFRerr_best'] = nondet['SFRerr_best']/(nondet['SFR_best']*np.log(10))
@@ -161,6 +188,19 @@ def read_GASS():
 def f_passive(x, a, b, zeta):
     c = 1 + np.tanh(zeta)
     return c + ((1-c)/(1+np.power(np.power(10,x-a), b)))
+
+def plot_samples_3(sampler, ndim, fname):
+    fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
+    samples = sampler.get_chain()
+    labels = ['h1', 'h2', 'lnh']
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
 
 def plot_samples_full(sampler, ndim, fname):
     fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
@@ -174,6 +214,68 @@ def plot_samples_full(sampler, ndim, fname):
         ax.yaxis.set_label_coords(-0.1, 0.5)
     axes[-1].set_xlabel("step number");
     plt.savefig('img/sampler' + fname + '.pdf')
+
+def SFR_HI_fit_params(params):
+    h1, h2, lnh = params
+    if  0.6 < h1 < 1.0 and \
+        8.0 < h2 < 11.0 and \
+        -2.0 < lnh < 2.0:
+        return 0
+    return -np.inf
+
+def SFR_HI_fit(params):
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # params
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    h1, h2, lnh = params
+    x1, x2, y1, y2, S1, S2 = GASS_data
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # log likelihood for the linear SFR-MHI plane
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    v = np.array([-h1, 1.0])
+    deltaN = y1 - (h1 * x1) - h2
+    model = (h1 * x2) + h2
+    sigma = np.dot(np.dot(S1, v), v) + np.exp(2 * lnh)
+    sigma2 = np.dot(np.dot(S2, v), v) + np.exp(2 * lnh)
+    sigma2 = sigma2 ** 0.5
+    ll1 = -0.5 * np.sum(np.square(deltaN) / sigma + np.log(sigma))
+    I = np.zeros(len(x2))
+    for i in range(0,len(x2)):
+        I[i] = np.log(((2 * np.pi) ** 0.5) * 0.5 * (special.erf((y2[i]-model[i]) / ((2 ** 0.5) * sigma2[i])) + 1))
+    ll2 = np.sum(I)
+    LL_SFR_MHI = ll1  + ll2
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    return LL_SFR_MHI + SFR_HI_fit_params(params)
+
+def MHI_Mstar_fit_params(params):
+    a1, a2, lna = params
+    if  0.0 < a1 < 2.0 and \
+        -5.0 < a2 < 8.0 and \
+        -2.0 < lna < 2.0:
+        return 0
+    return -np.inf
+
+def MHI_Mstar_fit(params):
+    a1, a2, lna = params
+    x, x2, y, y2, S1, S2 = GASS_data2
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # log likelihood for the linear SFR-MHI plane
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    v = np.array([-a1, 1.0])
+    deltaN = y - (a1 * x) - a2
+    model = (a1 * x2) + a2
+    sigma = np.dot(np.dot(S1, v), v) + np.exp(2 * lna)
+    sigma2 = np.dot(np.dot(S2, v), v) + np.exp(2 * lna)
+    sigma2 = sigma2 ** 0.5
+    ll1 = -0.5 * np.sum(np.square(deltaN) / sigma + np.log(sigma))
+    I = np.zeros(len(x2))
+    for i in range(0,len(x2)):
+        I[i] = np.log(((2 * np.pi) ** 0.5) * 0.5 * (special.erf((y2[i]-model[i]) / ((2 ** 0.5) * sigma2[i])) + 1))
+    ll2 = np.sum(I)
+    LL_SFR_MHI = ll1  + ll2
+
+    return LL_SFR_MHI + MHI_Mstar_fit_params(params)
+
 
 def log_mainsequence_priors_full(params):
     b1, b2, b3, lnb, r1, r2, r3, lnr, alpha, beta, zeta = params
@@ -279,8 +381,7 @@ def log_marg_mainsequence_full2(params):
     ll1 = -0.5 * np.sum(np.square(deltaN) / sigma + np.log(sigma))
     I = np.zeros(len(x2))
     for i in range(0,len(x2)):
-        I[i] = np.log(((2 * np.pi) ** 0.5) *
-                      0.5 * (special.erf((y2[i]-model[i]) / ((2 ** 0.5) * sigma2[i])) + 1))
+        I[i] = np.log(((2 * np.pi) ** 0.5) * 0.5 * (special.erf((y2[i]-model[i]) / ((2 ** 0.5) * sigma2[i])) + 1))
     ll2 = np.sum(I)
     LL_SFR_MHI = ll1  + ll2
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -436,7 +537,7 @@ def bootstrap_GAMA(GAMAb, GAMAr, frac, n):
     print (type(std), np.shape(std))
     return xnew, std, ratio
 
-def sfr_histogram(GAMA, samples4, M, phi_Baldry):
+def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
     sfr_bins = np.linspace(-3.0, 3.0, 25)
     # Make the plot
     fig, ax = plt.subplots(nrows = 4, ncols = 2, squeeze=False, figsize=(12, 24))
@@ -467,7 +568,6 @@ def sfr_histogram(GAMA, samples4, M, phi_Baldry):
         b2ave = np.mean(b2ave)
         b3ave = np.mean(b3ave)
         ax[0,1].plot(SFR,np.log10(phi), color = 'k', alpha = 0.1, linewidth = 0.1)
-        ax[2,0].plot(SFR,np.log10(phi), color = 'k', alpha = 0.1, linewidth = 0.1)
         ax2.plot(SFR,np.log10(phi), color = 'k', alpha = 0.1, linewidth = 0.1)
         ax2.set_xlim(b1ave*36 + b2ave*6 + b3ave, b1ave*144 + b2ave*12 + b3ave)
         ax[2,1].set_xlim(6,12)
@@ -543,25 +643,25 @@ def sfr_histogram(GAMA, samples4, M, phi_Baldry):
     best_fits_4 = np.zeros((N*2,n))
     MHI = np.linspace(5,13,n)
     i=0
+    x = np.linspace(-3,3,100)
     for params in samples4[np.random.randint(len(samples4), size = N)]:
         for idx, element in enumerate(MHI):
             b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
             best_fits[i,idx] = dblquad(integrand_MHI_blue, -8.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, *params))[0]
 
-            # best_fits_1[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1-0.2, h2, np.log(0.1)))[0]
-            # best_fits_2[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1-0.1, h2, np.log(0.2)))[0]
-            # best_fits_3[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2, np.log(0.3)))[0]
-            # best_fits_4[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.2, h2, np.log(0.4)))[0]
-
+            best_fits_1[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.1)))[0]
+            best_fits_2[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.2)))[0]
+            best_fits_3[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.3)))[0]
+            best_fits_4[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.4)))[0]
         i+=1
     for i in range(0, N):
         ax[1,0].plot(MHI, np.log10(best_fits[i,:]), alpha = 1, color = 'c', label = str(round(np.exp(lnh), 2)))
         ax[2,1].plot(MHI, np.log10(best_fits[i,:]), alpha = 1, color = 'c', label = str(round(np.exp(lnh), 2)))
-
-        # ax[1,0].plot(MHI, np.log10(best_fits_1[1,:]), alpha = 1, color = 'b', linestyle = '--', label = '-0.2')
-        # ax[1,0].plot(MHI, np.log10(best_fits_2[1,:]), alpha = 1, color = 'r', linestyle = '--',  label = '-0.1')
-        # ax[1,0].plot(MHI, np.log10(best_fits_3[1,:]), alpha = 1, color = 'k', linestyle = '--',  label = '+0.1')
-        # ax[1,0].plot(MHI, np.log10(best_fits_4[1,:]), alpha = 1, color = 'm', linestyle = '--',  label = '+0.2')
+        ax[1,1].plot(x, ((h1+0.1)*x) + h2+0.1, alpha = 1, color = 'r')
+        ax[1,0].plot(MHI, np.log10(best_fits_1[1,:]), alpha = 1, color = 'b', linestyle = '--', label = '0.1')
+        ax[1,0].plot(MHI, np.log10(best_fits_2[1,:]), alpha = 1, color = 'r', linestyle = '--',  label = '0.2')
+        ax[1,0].plot(MHI, np.log10(best_fits_3[1,:]), alpha = 1, color = 'k', linestyle = '--',  label = '0.3')
+        ax[1,0].plot(MHI, np.log10(best_fits_4[1,:]), alpha = 1, color = 'm', linestyle = '--',  label = '0.4')
     # ax[1,0].plot(MHI,np.log10(phi), color = 'k', alpha = 0.1, linewidth = 0.1)
     ax[1,0].legend(loc="upper right")
     # ax[1,0].plot(MHI, np.log10(best_fits[0,:]), alpha = 0.1, color = 'g')
@@ -589,33 +689,48 @@ def sfr_histogram(GAMA, samples4, M, phi_Baldry):
     ax[1,1].set_xlim(-4, 3.0)
     ax[1,1].set_ylim(6, 13)
     ax[1,0].set_ylim(-10, 0.0)
-    x = np.linspace(-3,3,100)
+
     xxGASS, det, nondet = read_GASS()
-    for params in samples4[np.random.randint(len(samples4), size=10)]:
-        b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-        xxGASS['b_mean'] = (b1*xxGASS['lgMstar']*xxGASS['lgMstar']) + (b2*xxGASS['lgMstar']) + b3
-        xxGASS['r_mean'] = (r1*xxGASS['lgMstar']) + r2
-        xxGASS['f_pass1'] = f_passive(GAMA['lgMstar'], alpha, beta, zeta)
-        xxGASS['rand'] = np.random.uniform(0, 1, len(GAMA))
-        xxGASS['sfr_model'] = -9.9
-        # calculate the model sfrs for this set of params
-        for idx, row in xxGASS.iterrows():
-            # if random number is less than f_pass its a red galaxy
-            if row['rand'] <= row['f_pass1']:
-                xxGASS.loc[idx,'sfr_model'] = row['r_mean'] + np.random.normal(0, np.exp(lnr))
-            # else its a blue galaxy
-            else:
-                xxGASS.loc[idx,'sfr_model'] = row['b_mean'] + np.random.normal(0, np.exp(lnb))
+    ax[2,0].scatter(xxGASS['lgMstar'], xxGASS['lgMHI'], s = 3)
+    # for params in samples4[np.random.randint(len(samples4), size=10)]:
+    #     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
+    #     xxGASS['b_mean'] = (b1*xxGASS['lgMstar']*xxGASS['lgMstar']) + (b2*xxGASS['lgMstar']) + b3
+    #     xxGASS['r_mean'] = (r1*xxGASS['lgMstar']) + r2
+    #     xxGASS['f_pass1'] = f_passive(xxGASS['lgMstar'], alpha, beta, zeta)
+    #     xxGASS['rand'] = np.random.uniform(0, 1, len(xxGASS))
+    #     xxGASS['sfr_model'] = -9.9
+    #     # calculate the model sfrs for this set of params
+    #     for idx, row in xxGASS.iterrows():
+    #         # if random number is less than f_pass its a red galaxy
+    #         if row['rand'] <= row['f_pass1']:
+    #             xxGASS.loc[idx,'sfr_model'] = row['r_mean'] + np.random.normal(0, np.exp(lnr))
+    #         # else its a blue galaxy
+    #         else:
+    #             xxGASS.loc[idx,'sfr_model'] = row['b_mean'] + np.random.normal(0, np.exp(lnb))
+    # These are the new arguments that I used
+    scatter_kwargs = {"zorder":100, "vmin":min(xxGASS['lgMstar']), "vmax":max(xxGASS['lgMstar']), "cmap":'cubehelix'}
+    error_kwargs = {"lw":.5, "zorder":0}
 
-
-    ax[1,1].scatter(np.log10(xxGASS['SFR_best']), xxGASS['lgMHI'])
+    detections = xxGASS[xxGASS['HIconf_flag'] == 0]
+    non_detections = xxGASS[xxGASS['HIconf_flag'] == -99]
+    ax[1,1].scatter(np.log10(detections['SFR_best']), detections['lgMHI'], c = detections['lgMstar'], s = 3, **scatter_kwargs)
+    # ax[1,1].errorbar(np.log10(detections['SFR_best']), detections['lgMHI'], xerr = detections['SFRerr_best'], yerr = .2, mfc='k', mec='k', markersize = 0.3, linewidth=.3, markeredgewidth=.3, capthick=.3, fmt = 'o', **error_kwargs)
+    ax[3,0].errorbar(np.log10(detections['SFR_best']), detections['lgMHI'], xerr = detections['SFRerr_best'], yerr = .2, mfc='b', mec='b', markersize = 0.3, linewidth=.3, markeredgewidth=.3, capthick=.3, fmt = 'o')
+    # ax[1,1].errorbar(np.log10(non_detections['SFR_best']), non_detections['lgMHI'], xerr = non_detections['SFRerr_best'], yerr = 0.2, uplims = True, mfc='k', mec='k', markersize = 0.3, linewidth=.3, markeredgewidth=.3, capthick=.3, fmt = 'o', **error_kwargs)
+    sc = ax[1,1].scatter(np.log10(non_detections['SFR_best']), non_detections['lgMHI'], c = non_detections['lgMstar'], s = 3, **scatter_kwargs)
+    plt.colorbar(sc)
     for params in samples4[np.random.randint(len(samples4), size = 100)]:
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         ax[1,1].plot(x, (h1*x) + h2, color = 'g', alpha = 0.1)
-
+        ax[3,0].plot(x, (h1*x) + h2, color = 'g', alpha = 0.1)
+    for params in samples5[np.random.randint(len(samples5), size = 100)]:
+        h1, h2, lnh = params
+        ax[3,0].plot(x, (h1*x) + h2, color = 'r', alpha = 0.1)
+    ax[1,1].set_xlim(-3,2)
+    ax[1,1].set_ylim(7,11)
     ax[2,1].plot(M, np.log10(phi_Baldry))
     ax[2,1].set_ylim(-10,0)
-    ax[2,0].set_ylim(-10,0)
+    # ax[2,0].set_ylim(-10,0)
     # plt.legend()
     plt.tight_layout()
     plt.savefig('img/GAMA_sfr_hist.pdf')
@@ -733,6 +848,42 @@ def bin_sfrs(GAMA, sfr_bins):
         sfr.append((sfr_bins[idx] + sfr_bins[idx + 1])/2)
     return sfr, n
 
+def m_gas_ratio(det):
+    # read in the ALFA ALFA datasets from the 40% paper
+    ALFAALFA = pd.read_csv('ALFAALFA.csv', comment = '#', header = None, sep=",")
+    ALFAALFA.columns = ['x', 'y', 'dy', 'MHI', 'phi', 'err', 'phi_err']
+    ALFAALFA = ALFAALFA[np.isfinite(ALFAALFA['phi_err'])]
+    MHI_alfa, phi_alfa, phi_err_alfa = np.round(ALFAALFA['MHI'].values,2), ALFAALFA['phi'].values, ALFAALFA['phi_err'].values
+
+    ndim, nwalkers = 3, 100
+    g = [1.0, 0.0, -1.1]
+    pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+
+    sampler5 = emcee.EnsembleSampler(nwalkers, ndim, MHI_Mstar_fit, pool = pool)
+    sampler5.run_mcmc(pos, 1500, progress=True)
+    plot_samples_3(sampler5, ndim, 'MHI_scaling')
+    samples5 = sampler5.chain[:, 800:, :].reshape((-1, ndim))
+    # np.savetxt('data/samples5.txt', samples5)
+    fig, ax = plt.subplots(nrows = 1, ncols = 3, squeeze=False, figsize=(18,6))
+    ax[0,0].errorbar(det['lgMstar'], det['lgMHI'], xerr  = 0.0, yerr = det['lgMHI_err'], fmt = 'o', markersize = 0.1)
+    ax[0,1].errorbar(MHI_alfa, phi_alfa, yerr = phi_err_alfa, fmt='o', capsize = 2, markersize = 3, linewidth=2, markeredgewidth=2, capthick=2, mfc='gray', mec='gray', ecolor = 'gray')
+    ax[0,2].errorbar(det['lgMstar'], det['lgMHI']/det['lgMstar'], xerr  = 0, yerr = 0, fmt = 'o')
+    x = np.linspace(9,11.5,200)
+    MHI = np.linspace(6,13,20)
+    for params in samples5[np.random.randint(len(samples5), size=100)]:
+        h1, h2, lnh = params
+        ax[0,0].plot(x, h1*x + h2, color = 'g', alpha = 0.1)
+        phi = []
+        for idx, element in enumerate(MHI):
+            phi.append(quad(integrand_MHI_direct, 0, 12, args=(element, h1, h2, -10))[0])
+        ax[0,1].plot(MHI, np.log10(phi), color = 'g', alpha = 0.1)
+    ax[0,0].set_xlabel(r"$\mathrm{log \, M_{*}}$")
+    ax[0,1].set_xlabel(r"$\mathrm{log \, M_{HI}}$")
+    ax[0,0].set_ylabel(r"$\mathrm{log \, M_{HI}}$")
+    ax[0,1].set_ylabel(r"$\mathrm{log \, \phi}$")
+    ax[0,1].set_ylim(-10,0)
+    plt.savefig('img/atomic_gas_fraction.pdf')
+
 popts = pd.read_csv('bestfits.csv')
 mstars = np.linspace(7.6,11.4,39)
 bins = np.linspace(-3.5,1.5,51)
@@ -741,7 +892,7 @@ GAMA, GAMAb, GAMAr = read_GAMA()
 xxGASS, det, nondet = read_GASS()
 # calculate error matrices etc
 S1 = S_error(det['SFRerr_best'].values, [0.2])
-S2 = S_error(nondet['SFRerr_best'].values, [0.14])
+S2 = S_error(nondet['SFRerr_best'].values, [0.2])
 x1, y1 = det['SFR_best'].values, det['lgMHI'].values
 x2, y2 = nondet['SFR_best'].values, nondet['lgMHI'].values
 
@@ -765,6 +916,26 @@ GAMA_passive = GAMA_pass['logM*'], GAMA_pass['logSFR'], GAMA_pass['logM*err'], G
 GAMA_sforming = GAMA_sf['logM*'], GAMA_sf['logSFR'], GAMA_sf['logM*err'], GAMA_sf['logSFRerr']
 passive_data = xnew, ratio, std
 sfr_hist_data = sfr, n
+
+xxGASS, det, nondet = read_GASS()
+xxGASS_final = fits.open('data/xGASS_RS_final_Serr_180903.fits')
+xxGASS_final = Table(xxGASS_final[1].data).to_pandas()
+xxGASS['SNR'] = xxGASS_final['SNR']
+xxGASS['MHI_err'] = np.power(10, xxGASS['lgMHI'])/xxGASS['SNR']
+xxGASS['lgMHI_err'] = xxGASS['MHI_err']/(np.power(10,xxGASS['lgMHI'])*np.log(10))
+xxGASS['lgMstar_err'] = 0.0
+det = xxGASS[xxGASS['HIconf_flag']==0]
+nondet = xxGASS[xxGASS['HIconf_flag']==-99]
+print (xxGASS)
+# det = xxGASS[xxGASS['SNR']>0]
+global GASS_data2
+global GASS_data3
+S1 = S_error(det['lgMHI_err'].values, [0.0])
+S2 = S_error(nondet['lgMHI_err'].values, [0.0])
+
+GASS_data2 = det['lgMstar'], nondet['lgMstar'], det['lgMHI'], nondet['lgMHI'], S1, S2
+
+
 # jump = 4
 # data = np.zeros((len(mstars) - jump, 7))
 # data2 = np.zeros((len(mstars) - jump, 7))
@@ -836,27 +1007,43 @@ sfr_hist_data = sfr, n
 
 
 
-ndim, nwalkers = 13, 100
-g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
-pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+# ndim, nwalkers = 13, 100
+# g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
+# pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
 pool = Pool(2)
-
-# # emcee using delta from observed SFR histogram
-# sampler3 = emcee.EnsembleSampler(nwalkers, ndim, log_marg_mainsequence_full3, pool = pool)
-# sampler3.run_mcmc(pos, 1000, progress=True)
-# samples3 = sampler3.chain[:, 500:, :].reshape((-1, ndim))
-# plot_samples_full(sampler3, ndim, 'mainsequence_full')
-# np.savetxt('data/samples3.txt', samples3)
-
-# emcee without using delta from observed SFR histogram
+#
+# # # emcee using delta from observed SFR histogram
+# # sampler3 = emcee.EnsembleSampler(nwalkers, ndim, log_marg_mainsequence_full3, pool = pool)
+# # sampler3.run_mcmc(pos, 1000, progress=True)
+# # samples3 = sampler3.chain[:, 500:, :].reshape((-1, ndim))
+# # plot_samples_full(sampler3, ndim, 'mainsequence_full')
+# # np.savetxt('data/samples3.txt', samples3)
+#
+# # emcee without using delta from observed SFR histogram
 # sampler4 = emcee.EnsembleSampler(nwalkers, ndim, log_marg_mainsequence_full2, pool = pool)
 # sampler4.run_mcmc(pos, 1500, progress=True)
 # plot_samples_full(sampler4, ndim, 'mainsequence_full')
 # samples4 = sampler4.chain[:, 800:, :].reshape((-1, ndim))
 # np.savetxt('data/samples4.txt', samples4)
-M, phi_Baldry, phi_GAMA18, xbaldry, ybaldry, baldry_err = mass_functions()
-# samples3 = np.loadtxt('data/samples3.txt')
-samples4 = np.loadtxt('data/samples4.txt')
-# sfrmplane(GAMA_sf, GAMA_pass, samples3)
-sfr_histogram(GAMA, samples4, M, phi_Baldry)
+#
+# ndim, nwalkers = 3, 100
+# g = [0.8, 10.0, -1.1]
+# pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+#
+# sampler5 = emcee.EnsembleSampler(nwalkers, ndim, SFR_HI_fit, pool = pool)
+# sampler5.run_mcmc(pos, 1500, progress=True)
+# plot_samples_full(sampler5, ndim, 'mainsequence_full')
+# samples5 = sampler5.chain[:, 800:, :].reshape((-1, ndim))
+# np.savetxt('data/samples5.txt', samples5)
+
+three_dim_plot(det)
+# m_gas_ratio(det)
+# do the calculation of the galaxy stellar mass functions
+# M, phi_Baldry, phi_GAMA18, xbaldry, ybaldry, baldry_err = mass_functions()
+# read in the already run and cut chains
+# samples4 = np.loadtxt('data/samples4.txt')
+# samples5 = np.loadtxt('data/samples5.txt')
+# make 8 panel plots howing all the different trends and parameter estimation fits
+# sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry)
 # plot_trends(samples3)
+# sfrmplane(GAMA_sf, GAMA_pass, samples3)
