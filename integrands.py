@@ -2,12 +2,12 @@ import numpy as np
 import schechter
 import models
 
-def integrand_SFR1(M, SFR, params, gsmf_params):
+def integrand_SFR1(M, SFR, m_step, params, gsmf_params):
     # parameters inferred from emcee
     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
     Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
     # probabilities
-    phi_Mstar_double = schechter.double_schechter_peak(M, m_step, gsmf_params, -4)
+    phi_Mstar_double = schechter.double_schechter_peak(M, m_step, gsmf_params, -2)
     fpass = models.f_passive(M, alpha, beta, zeta)
     # P_SFR_given_passive
     y_passive = r1*M + r2

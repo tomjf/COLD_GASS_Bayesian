@@ -58,6 +58,7 @@ def schechterL(luminosity, phiStar, alpha, LStar):
 
 
 def double_schechter_peak(M, M_peaked, gsmf_params, sigma):
-    phi_Mstar_double = double_schechter(M_peaked, gsmf_params)
+    # phi_Mstar_double = double_schechter(M_peaked, gsmf_params)
+    phi_Mstar_double = 0.1
     phi = phi_Mstar_double*np.sqrt(2*np.pi*np.exp(sigma)*np.exp(sigma))*models.Gaussian_Conditional_Probability(M, M_peaked, sigma)
     return phi
