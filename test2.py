@@ -631,7 +631,8 @@ def read_GAMA():
     GAMA = GAMA[GAMA['logSFR']>-3.5]
     GAMAb = GAMA[GAMA['ColorFlag']==1]
     GAMAr = GAMA[GAMA['ColorFlag']==2]
-
+    print (np.min(GAMA['z']))
+    print (np.max(GAMA['z']))
     return GAMA, GAMAb, GAMAr
 
 def MainSequence():
@@ -2100,7 +2101,7 @@ def test_schechter():
 # chain = all_fits()
 # chain = np.savetxt('converged_no_constraint3.txt', chain)
 #
-chain = np.loadtxt('converged.txt')
+# chain = np.loadtxt('converged.txt')
 # chain2 = np.loadtxt('converged_no_constraint.txt')
 # chain3 = np.loadtxt('converged_no_constraint3.txt')
 # plot_corner4(chain3, 'no_constraint2.pdf')
@@ -2109,7 +2110,7 @@ chain = np.loadtxt('converged.txt')
 # print (a1)
 # print (params)
 # MHI_hist2(20, 10, chain, chain2, chain3, 'img/MHI3_hist.pdf')
-MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
+# MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
 
 
 # SFRM_plane()
@@ -2122,7 +2123,7 @@ MH2_hist2(20, 10, chain, 'img/MH2_2_hist.pdf')
 #
 
 ################################################################################
-# GAMA, GAMAb, GAMAr = read_GAMA()
+GAMA, GAMAb, GAMAr = read_GAMA()
 # Doing the M*-SFR emcee fit and plot
 # Mstar_SFR_chain = MainSequence()
 # Doing the SFR-MH2 emcee fit and plot
