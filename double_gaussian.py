@@ -4,7 +4,6 @@ from IPython.display import display, Math
 from astropy.io import fits
 from astropy.table import Table
 import math
-import mpmath
 import numpy as np
 from scipy import integrate
 from scipy.stats import lognorm, gennorm, genlogistic
@@ -24,9 +23,10 @@ import corner
 from scipy.integrate import quad, dblquad, nquad
 from scipy import special
 import random
-from integrand import integrand_MHI, integrand_MHI_var_sigma, integrand_MHI_double, integrand_MHI_logistic
 import os
 import time
+import schechter
+import models
 os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -79,128 +79,6 @@ def plane(x, y, params):
     z = a*x + b*y + c
     return z
 
-def log_schechter_true(logL, log_phi, log_L0, alpha):
-    # print (log_phi, log_L0, alpha)
-    log = np.log(10)
-    frac = np.power(10,(alpha+1)*(logL-log_L0))
-    exp = np.exp(-np.power(10,logL-log_L0))
-    return log*log_phi*frac*exp
-
-def double_schechter(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    return phi_Mstar_double
-
-def single_schechter_analytic(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    Mstar2 = np.power(10,Mstar)
-    phi_Mstar_single = phistar2*mpmath.gammainc(alpha2+1, M/Mstar2)
-    return float(str(phi_Mstar_single))
-
-def double_schechter_analytic(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    Mstar2 = np.power(10,Mstar)
-    phi_Mstar_double = phistar1*mpmath.gammainc(alpha1+1, M/Mstar2) + phistar2*mpmath.gammainc(alpha2+1, M/Mstar2)
-    return float(str(phi_Mstar_double))
-
-def single_schechter(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    return phi_Mstar_double
-
-def single_schechter_linear(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    Mstar2 = np.power(10,Mstar)
-    ratio = M/Mstar2
-    phi_Mstar_single = np.exp(-ratio)*((phistar2*np.power(ratio, alpha2)))*(1/Mstar2)
-    return phi_Mstar_single
-
-def double_schechter_linear(M, gsmf_params):
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    Mstar2 = np.power(10,Mstar)
-    ratio = M/Mstar2
-    # part1 = np.exp(-M/Mstar)
-    # part2 = (phistar1*np.power(M/Mstar, alpha1))
-    # part3 = (phistar2*np.power(M/Mstar, alpha2))
-    # print ('exp', part1)
-    # print ('pow1', part2)
-    # print ('pow2', part3)
-    phi_Mstar_double = np.exp(-ratio)*((phistar1*np.power(ratio, alpha1)) + (phistar2*np.power(ratio, alpha2)))*(1/Mstar2)
-    return phi_Mstar_double
-
-def schechterL(luminosity, phiStar, alpha, LStar):
-    """Schechter luminosity function."""
-    LOverLStar = (luminosity/LStar)
-    return (phiStar/LStar) * LOverLStar**alpha * np.exp(- LOverLStar)
-
-
-def double_schechter_peak(M, M_peaked, gsmf_params, sigma):
-    phi_Mstar_double = double_schechter(M_peaked, gsmf_params)
-    phi = phi_Mstar_double*np.sqrt(2*np.pi*np.exp(sigma)*np.exp(sigma))*Gaussian_Conditional_Probability(M, M_peaked, sigma)
-    return phi
-
-def integrand_MHI_blue(M, SFR, MHI, *params):
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    lnh
-    Mstar, phistar1, alpha1 = 10.72, 0.71E-3, -1.45
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)))
-    f = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-f),2))
-    f2 = (h1*SFR) + h2
-    P_MHI_given_SFR = (1/np.sqrt(2*np.pi*np.power(np.exp(lnh),2)))*np.exp((-1/(2*np.power(np.exp(lnh),2)))*np.power((MHI-f2),2))
-    return phi_Mstar_double*P_SFR_given_Mstar*P_MHI_given_SFR
-
-def integrand_MHI_total(M, SFR, MHI, params, gsmf_params):
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = (1/np.sqrt(2*np.pi*np.power(np.exp(lnr),2)))*np.exp((-1/(2*np.power(np.exp(lnr),2)))*np.power((SFR-y_passive),2))
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-y_sforming),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
-    # P_MHI_given_SFR
-    f2 = (h1*SFR) + h2
-    P_MHI_given_SFR = (1/np.sqrt(2*np.pi*np.power(np.exp(lnh),2)))*np.exp((-1/(2*np.power(np.exp(lnh),2)))*np.power((MHI-f2),2))
-    return phi_Mstar_double*P_SFR_given_Mstar_total*P_MHI_given_SFR
-
-def integrand_MHI_blue(M, SFR, MHI, params, gsmf_params):
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-y_sforming),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = (1-fpass)*P_SFR_given_Mstar_blue
-    # P_MHI_given_SFR
-    f2 = (h1*SFR) + h2
-    P_MHI_given_SFR = (1/np.sqrt(2*np.pi*np.power(np.exp(lnh),2)))*np.exp((-1/(2*np.power(np.exp(lnh),2)))*np.power((MHI-f2),2))
-    return phi_Mstar_double*P_SFR_given_Mstar_total*P_MHI_given_SFR
-
-def integrand_MHI_red(M, SFR, MHI, params, gsmf_params):
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = (1/np.sqrt(2*np.pi*np.power(np.exp(lnr),2)))*np.exp((-1/(2*np.power(np.exp(lnr),2)))*np.power((SFR-y_passive),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red
-    # P_MHI_given_SFR
-    f2 = (h1*SFR) + h2
-    P_MHI_given_SFR = (1/np.sqrt(2*np.pi*np.power(np.exp(lnh),2)))*np.exp((-1/(2*np.power(np.exp(lnh),2)))*np.power((MHI-f2),2))
-    return phi_Mstar_double*P_SFR_given_Mstar_total*P_MHI_given_SFR
-
 def S_error(x_err,y_err):
     N = len(x_err)
     S = np.zeros((N, 2, 2))
@@ -213,152 +91,6 @@ def S_error(x_err,y_err):
             L[1, 1] = np.square(y_err[n])
         S[n] = L
     return S
-
-def integrand_SFR1(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = double_schechter_peak(M, m_step, gsmf_params, -4)
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = Gaussian_Conditional_Probability(SFR, y_passive, lnr)
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = Gaussian_Conditional_Probability(SFR, y_sforming, lnb)
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
-
-def integrand_SFR_blue1(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = double_schechter_peak(M, m_step, gsmf_params, -4)
-    fpass = f_passive(M, alpha, beta, zeta)
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = Gaussian_Conditional_Probability(SFR, y_sforming, lnb)
-    # P_SFR_total
-    P_SFR_given_Mstar_total = (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
-
-def integrand_SFR_red1(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = double_schechter_peak(M, m_step, gsmf_params, -4)
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = Gaussian_Conditional_Probability(SFR, y_passive, lnr)
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
-
-def Gaussian_Conditional_Probability(x, mean, sigma):
-    sigma = np.exp(sigma)
-    return (1/np.sqrt(2*np.pi*np.power(sigma,2)))*np.exp((-1/(2*np.power(sigma,2)))*np.power((x-mean),2))
-
-def integrand_SFR1c(SFR, M, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = Gaussian_Conditional_Probability(SFR, y_passive, lnr)
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = Gaussian_Conditional_Probability(SFR, y_sforming, lnb)
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return P_SFR_given_Mstar_total
-
-def integrand_SFR1b(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = double_schechter(M, gsmf_params)
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = r1*M + r2
-    P_SFR_given_Mstar_red = (1/np.sqrt(2*np.pi*np.power(np.exp(lnr),2)))*np.exp((-1/(2*np.power(np.exp(lnr),2)))*np.power((SFR-y_passive),2))
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-y_sforming),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return np.power(10,SFR)*phi_Mstar_double*P_SFR_given_Mstar_total
-
-def integrand_SFR2(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = double_schechter(M, gsmf_params)
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = (b1*M*M) + (b2*M) + b3 + r2
-    P_SFR_given_Mstar_red = (1/np.sqrt(2*np.pi*np.power(np.exp(lnr),2)))*np.exp((-1/(2*np.power(np.exp(lnr),2)))*np.power((SFR-y_passive),2))
-    # P_SFR_given_sforming
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-y_sforming),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
-
-def integrand_MHI_direct(M, MHI, *params):
-    # parameters inferred from emcee
-    a1, a2, lna = params
-
-    Mstar = 10.78
-    phistar1 = 2.93E-3
-    phistar2 = 0.63E-3
-    alpha1 = - 0.62
-    alpha2 = - 1.50
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    P_MHI_given_Mstar = (1/np.sqrt(2*np.pi*np.power(np.exp(lna),2)))*np.exp((-1/(2*np.power(np.exp(lna),2)))*np.power((MHI - ((a1*M) + a2)),2))
-    # P_SFR_total
-    return phi_Mstar_double*P_MHI_given_Mstar
-
-def integrand_SFR_blue2(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    fpass = f_passive(M, alpha, beta, zeta)
-    y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = (1/np.sqrt(2*np.pi*np.power(np.exp(lnb),2)))*np.exp((-1/(2*np.power(np.exp(lnb),2)))*np.power((SFR-y_sforming),2))
-    # P_SFR_total
-    P_SFR_given_Mstar_total = (1-fpass)*P_SFR_given_Mstar_blue
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
-
-def integrand_SFR_red2(M, SFR, params, gsmf_params):
-    # parameters inferred from emcee
-    b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-    Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
-    # probabilities
-    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    fpass = f_passive(M, alpha, beta, zeta)
-    # P_SFR_given_passive
-    y_passive = (b1*M*M) + (b2*M) + b3 + r2
-    P_SFR_given_Mstar_red = (1/np.sqrt(2*np.pi*np.power(np.exp(lnr),2)))*np.exp((-1/(2*np.power(np.exp(lnr),2)))*np.power((SFR-y_passive),2))
-    P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red
-    # return phi_SFR
-    return phi_Mstar_double*P_SFR_given_Mstar_total
 
 def read_GASS():
     xxGASS = fits.open('data/xxGASS_MASTER_CO_170620_final.fits')
@@ -376,10 +108,6 @@ def read_GASS():
     nondet['SFRerr_best'] = nondet['SFRerr_best']/(nondet['SFR_best']*np.log(10))
     nondet['SFR_best'] = np.log10(nondet['SFR_best'])
     return xxGASS, det, nondet
-
-def f_passive(x, a, b, zeta):
-    c = 1 + np.tanh(zeta)
-    return c + ((1-c)/(1+np.power(np.power(10,x-a), b)))
 
 def plot_samples_3(sampler, ndim, fname):
     fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
@@ -533,7 +261,7 @@ def log_mainsequence_priors_full2(params):
 
 def log_mainsequence_priors_full1(params):
     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta = params
-    # if f_passive(6.0, alpha, beta, zeta) < 0.4:
+    # if models.f_passive(6.0, alpha, beta, zeta) < 0.4:
     #     return -np.inf
     if  -1.0 < b1 < 1.0 and \
         0.0 < b2 < 3.0 and \
@@ -593,7 +321,7 @@ def log_marg_mainsequence_full1(params):
 
 def log_mainsequence_priors_full1b(params):
     b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta = params
-    # if f_passive(6.0, alpha, beta, zeta) < 0.4:
+    # if models.f_passive(6.0, alpha, beta, zeta) < 0.4:
     #     return -np.inf
     if  -1.0 < b1 < 1.0 and \
         0.0 < b2 < 3.0 and \
@@ -712,7 +440,7 @@ def log_marg_mainsequence_full3(params):
     # make the means, passive fractions for this set of params
     b_mean = (b1*xt*xt) + (b2*xt) + b3
     r_mean = (r1*xt) + r2
-    f_pass = f_passive(xt, alpha, beta, zeta)
+    f_pass = models.f_passive(xt, alpha, beta, zeta)
     rand = np.random.uniform(0, 1, len(xt))
     sfrs = []
     for idx, element in enumerate(b_mean):
@@ -837,10 +565,10 @@ def sfr_hist_only(samples1, samples2, min_mass, max_mass, gsmf_params, fname):
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         phi, phib, phir, phi_test = [], [], [], []
         for idx, element in enumerate(SFR):
-            phi.append(quad(integrand_SFR1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-            # phi_test.append(quad(integrand_SFR1b, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-            phib.append(quad(integrand_SFR_blue1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-            phir.append(quad(integrand_SFR_red1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            phi.append(quad(integrands.integrand_SFR1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            # phi_test.append(quad(integrands.integrand_SFR1b, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            phib.append(quad(integrands.integrand_SFR_blue1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            phir.append(quad(integrands.integrand_SFR_red1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
         counter += 1
         print(phi_test)
         if counter == 99:
@@ -865,9 +593,9 @@ def sfr_hist_only(samples1, samples2, min_mass, max_mass, gsmf_params, fname):
     #     b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
     #     phi, phib, phir = [], [], []
     #     for idx, element in enumerate(SFR):
-    #         phi.append(quad(integrand_SFR2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-    #         phib.append(quad(integrand_SFR_blue2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-    #         phir.append(quad(integrand_SFR_red2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+    #         phi.append(quad(integrands.integrand_SFR2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+    #         phib.append(quad(integrands.integrand_SFR_blue2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+    #         phir.append(quad(integrands.integrand_SFR_red2, min_mass, max_mass, args=(element, params, gsmf_params))[0])
     #     ax[0,0].plot(SFR, np.log10(phi), color = 'k', alpha = 0.05)
     #     ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05)
     #     ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05)
@@ -900,9 +628,9 @@ def MHI_mf_only(samples1, samples2, min_sfr, max_sfr, min_mass, max_mass, gsmf_p
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         phi, phib, phir = [], [], []
         for idx, element in enumerate(MHI):
-            phi.append(dblquad(integrand_MHI_total, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-            phib.append(dblquad(integrand_MHI_blue, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-            phir.append(dblquad(integrand_MHI_red, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+            phi.append(dblquad(integrands.integrand_MHI_total, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+            phib.append(dblquad(integrands.integrand_MHI_blue, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+            phir.append(dblquad(integrands.integrand_MHI_red, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
         counter += 1
         if counter == 9:
             ax[0,0].plot(MHI, np.log10(phi), color = 'k', alpha = 0.05, label = 'Total')
@@ -948,9 +676,9 @@ def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
         b1ave, b2ave, b3ave = [], [], []
         for idx, element in enumerate(SFR):
             # print (b1, b2, b3, element, np.roots([b1, b2, b3-element])[1])
-            phi.append(quad(integrand_SFR, 0, 12, args=(element, *params))[0])
-            phib.append(quad(integrand_SFR_blue, 6, 12, args=(element, *params))[0])
-            phir.append(quad(integrand_SFR_red, 0, 12, args=(element, *params))[0])
+            phi.append(quad(integrands.integrand_SFR, 0, 12, args=(element, *params))[0])
+            phib.append(quad(integrands.integrand_SFR_blue, 6, 12, args=(element, *params))[0])
+            phir.append(quad(integrands.integrand_SFR_red, 0, 12, args=(element, *params))[0])
             b1ave.append(b1)
             b2ave.append(b2)
             b3ave.append(b3)
@@ -974,7 +702,7 @@ def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
         # make the means, passive fractions for this set of params
         GAMA['b_mean'] = (b1*GAMA['logM*']*GAMA['logM*']) + (b2*GAMA['logM*']) + b3
         GAMA['r_mean'] = (r1*GAMA['logM*']) + r2
-        GAMA['f_pass1'] = f_passive(GAMA['logM*'], alpha, beta, zeta)
+        GAMA['f_pass1'] = models.f_passive(GAMA['logM*'], alpha, beta, zeta)
         # GAMA['f_pass2'] = exp_function2(GAMA['logM*'], 2.15695552e-04,  1.03762864e+00, -3.23331742e+00,  11.2)
         # print (GAMA[['logM*', 'f_pass']])
         GAMA['rand'] = np.random.uniform(0, 1, len(GAMA))
@@ -1042,12 +770,12 @@ def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
     for params in samples4[np.random.randint(len(samples4), size = N)]:
         for idx, element in enumerate(MHI):
             b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
-            best_fits[i,idx] = dblquad(integrand_MHI_blue, -8.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, *params))[0]
+            best_fits[i,idx] = dblquad(integrands.integrand_MHI_blue, -8.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, *params))[0]
 
-            best_fits_1[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.1)))[0]
-            best_fits_2[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.2)))[0]
-            best_fits_3[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.3)))[0]
-            best_fits_4[1,idx] = dblquad(integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.4)))[0]
+            best_fits_1[1,idx] = dblquad(integrands.integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.1)))[0]
+            best_fits_2[1,idx] = dblquad(integrands.integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.2)))[0]
+            best_fits_3[1,idx] = dblquad(integrands.integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.3)))[0]
+            best_fits_4[1,idx] = dblquad(integrands.integrand_MHI_blue, -5.0, 2.0, lambda SFR: 0.0, lambda SFR: 12.0, args = (element, b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1+0.1, h2+0.1, np.log(0.4)))[0]
         i+=1
     for i in range(0, N):
         ax[1,0].plot(MHI, np.log10(best_fits[i,:]), alpha = 1, color = 'c', label = str(round(np.exp(lnh), 2)))
@@ -1091,7 +819,7 @@ def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
     #     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
     #     xxGASS['b_mean'] = (b1*xxGASS['lgMstar']*xxGASS['lgMstar']) + (b2*xxGASS['lgMstar']) + b3
     #     xxGASS['r_mean'] = (r1*xxGASS['lgMstar']) + r2
-    #     xxGASS['f_pass1'] = f_passive(xxGASS['lgMstar'], alpha, beta, zeta)
+    #     xxGASS['f_pass1'] = models.f_passive(xxGASS['lgMstar'], alpha, beta, zeta)
     #     xxGASS['rand'] = np.random.uniform(0, 1, len(xxGASS))
     #     xxGASS['sfr_model'] = -9.9
     #     # calculate the model sfrs for this set of params
@@ -1147,7 +875,7 @@ def plot_trends(samples3):
     # ax[0,0].plot(x2, exp_function(x2, *popt2), color = 'c')
     ax[0,0].plot(x2, exp_function2(x2, *popt3), color = 'm')
     # for b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta in samples3[np.random.randint(len(samples3), size=100)]:
-    #     ax[0,0].plot(x2, f_passive(x2, alpha, beta, zeta), color = 'g', alpha = 0.1)
+    #     ax[0,0].plot(x2, models.f_passive(x2, alpha, beta, zeta), color = 'g', alpha = 0.1)
     ax[0,0].set_ylim(0,1.1)
     plt.savefig('img/trends_double_gaussian.pdf')
 
@@ -1163,7 +891,7 @@ def sfrmplane(GAMA, samples3, samples6):
     # b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta = params
     # ax[0,0].plot(x,third_order(x, b1, b2, b3), color = 'b')
     # ax[0,0].plot(x,second_order(x, r1, r2), color = 'r')
-    # ax[0,1].plot(x,f_passive(x, alpha, beta, zeta), color = 'k', linewidth = 4)
+    # ax[0,1].plot(x,models.f_passive(x, alpha, beta, zeta), color = 'k', linewidth = 4)
     # y_meas = data[:,3]/(data[:,0] + data[:,3])
     # print (y_meas)
     # y_meas[-3:] = 1
@@ -1171,7 +899,7 @@ def sfrmplane(GAMA, samples3, samples6):
     # print (y_meas)
     # ax[0,1].plot(data[:,6], y_meas, color = 'r', linewidth = 4)
     # popt, pcov = curve_fit(f_passive, data[:,6], y_meas, p0 = (alpha, beta, zeta))
-    # ax[0,1].plot(x, f_passive(x, *popt), color = 'k', linewidth = 4)
+    # ax[0,1].plot(x, models.f_passive(x, *popt), color = 'k', linewidth = 4)
     # ax[0,0].plot(x,third_order(x, -0.06, +1.95, -14.5), color = 'k', linewidth = 1)
     # ax[0,0].scatter(GAMA_sf['logM*'], GAMA_sf['logSFR'], s = 0.1, color = 'b')
     # ax[0,0].scatter(GAMA_pass['logM*'], GAMA_pass['logSFR'], s = 0.1, color = 'r')
@@ -1179,12 +907,12 @@ def sfrmplane(GAMA, samples3, samples6):
         # ax[0,0].plot(x, third_order(x, b1, b2, b3), alpha = 0.1, color = 'b')
         ax[0,0].plot(x, third_order(x, b1, b2, b3), alpha = 0.1, color = 'b')
         ax[0,0].plot(x, second_order(x, r1, r2), alpha = 0.1, color = 'r')
-        ax[0,1].plot(x, f_passive(x, alpha, beta, zeta), color = 'g', alpha = 0.1)
+        ax[0,1].plot(x, models.f_passive(x, alpha, beta, zeta), color = 'g', alpha = 0.1)
     # for b1, b2, b3, lnb, r2, lnr, alpha, beta, zeta in samples6[np.random.randint(len(samples6), size=100)]:
     #     # ax[0,0].plot(x, third_order(x, b1, b2, b3), alpha = 0.1, color = 'b')
     #     ax[0,0].plot(x, third_order(x, b1, b2, b3), alpha = 0.1, color = 'navy')
     #     ax[0,0].plot(x, third_order(x, b1, b2, b3 + r2), alpha = 0.1, color = 'crimson')
-    #     ax[0,1].plot(x, f_passive(x, alpha, beta, zeta), color = 'darkgreen', alpha = 0.1)
+    #     ax[0,1].plot(x, models.f_passive(x, alpha, beta, zeta), color = 'darkgreen', alpha = 0.1)
     # ax[0,1].scatter(xnew, ratio, color = 'k', s=2)
     # ax[0,0].plot(x, third_order(x, -0.06, +1.8, -12.0))
     # ax[0,0].plot(x, third_order(x, -0.06, +1.95, -14.5))
@@ -1240,8 +968,8 @@ def mass_functions(gsmf_params):
     # phi_Mstar_Baldry = np.log(10) * np.exp(-np.power(10,M-Mstar)) * \
     # (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + \
     # phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
-    phi_Mstar_Baldry = double_schechter(M, gsmf_params)
-    phi_Mstar_Baldry2 = double_schechter_linear(M2, gsmf_params)
+    phi_Mstar_Baldry = schechter.double_schechter(M, gsmf_params)
+    phi_Mstar_Baldry2 = schechter.double_schechter_linear(M2, gsmf_params)
     # phi_Mstar_Baldry3 = schechterL(M, 0.71E-3, -1.45, 10.72)
     # print (phi_Mstar_Baldry)
     # print (phi_Mstar_Baldry2)
@@ -1337,7 +1065,7 @@ def fake_data(params, N, mmin, mmax, GAMA):
     Mlist = GAMA['logM*'].values
     print (Mlist)
     df = pd.DataFrame(Mlist, columns = ['Mass'])
-    df['f_pass'] = f_passive(df['Mass'], alpha, beta, zeta)
+    df['f_pass'] = models.f_passive(df['Mass'], alpha, beta, zeta)
     df['rand'] = np.random.uniform(0,1, len(Mlist))
     df['sfr'] = 0
     for idx, row in df.iterrows():
@@ -1377,7 +1105,7 @@ def m_gas_ratio(det):
         ax[0,0].plot(x, h1*x + h2, color = 'g', alpha = 0.1)
         phi = []
         for idx, element in enumerate(MHI):
-            phi.append(quad(integrand_MHI_direct, 0, 12, args=(element, h1, h2, -10))[0])
+            phi.append(quad(integrands.integrand_MHI_direct, 0, 12, args=(element, h1, h2, -10))[0])
         ax[0,1].plot(MHI, np.log10(phi), color = 'g', alpha = 0.1)
     ax[0,0].set_xlabel(r"$\mathrm{log \, M_{*}}$")
     ax[0,1].set_xlabel(r"$\mathrm{log \, M_{HI}}$")
@@ -1595,16 +1323,16 @@ M = np.linspace(7,12,100)
 # phi_Mstar_double = double_schechter_peak(M, 9.5, gsmf_params, -4)
 # phi_Mstar_double = double_schechter_peak(M, 10.0, gsmf_params, -4)
 
-print ('Integral p(SFR_T|M*)dSFR = ', quad(integrand_SFR1c, -np.inf, np.inf, args=(10, samples6[10,:], gsmf_params))[0])
-# print ('testing p(SFR|M*)*phi(M*)', dblquad(integrand_MHI_total, -np.inf, np.inf,, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-print ('Integral p(SFR_x|M*)dSFR = ', quad(Gaussian_Conditional_Probability, -200, 200, args = (0,-1.1))[0])
+print ('Integral p(SFR_T|M*)dSFR = ', quad(integrands.integrand_SFR1c, -np.inf, np.inf, args=(10, samples6[10,:]))[0])
+# print ('testing p(SFR|M*)*phi(M*)', dblquad(integrands.integrand_MHI_total, -np.inf, np.inf,, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+print ('Integral p(SFR_x|M*)dSFR = ', quad(models.Gaussian_Conditional_Probability, -200, 200, args = (0,-1.1))[0])
 
-print ('Analytical Answer Single Schechter = ', single_schechter_analytic(np.power(10,8), gsmf_params))
-print ('Analytical Answer Double Schechter = ', double_schechter_analytic(np.power(10,8), gsmf_params))
+print ('Analytical Answer Single Schechter = ', schechter.single_schechter_analytic(np.power(10,8), gsmf_params))
+print ('Analytical Answer Double Schechter = ', schechter.double_schechter_analytic(np.power(10,8), gsmf_params))
 # print ('(Linear) Integral phi(M*)dM* = ', quad(double_schechter_linear, 0, 10E13, args=(np.array(gsmf_params)))[0])
 # print ('(Linear) Integral phi(M*)dM* = ', quad(single_schechter_linear, np.power(10,8), np.inf, args=(np.array(gsmf_params)))[0])
-print ('(Log) Integral phi(M*)dM* = ', quad(double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
-print ('(Log) Integral phi(M*)dM* = ', quad(single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
+print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
+print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
 
 mass_functions(gsmf_params)
 global m_step
