@@ -1,4 +1,5 @@
 from scipy import stats
+import nose
 # import pyximport
 from IPython.display import display, Math
 from astropy.io import fits
@@ -25,8 +26,11 @@ from scipy import special
 import random
 import os
 import time
+
 import schechter
 import models
+import integrands
+
 os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -565,27 +569,31 @@ def sfr_hist_only(samples1, samples2, min_mass, max_mass, gsmf_params, fname):
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         phi, phib, phir, phi_test = [], [], [], []
         for idx, element in enumerate(SFR):
-            phi.append(quad(integrands.integrand_SFR1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            integration = quad(integrands.integrand_SFR1b, min_mass, max_mass,
+                                args=(element, params, gsmf_params),
+                                epsrel = 1e-8, epsabs = 0)
+            # print (integration)
+            phi.append(integration[0])
             # phi_test.append(quad(integrands.integrand_SFR1b, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-            phib.append(quad(integrands.integrand_SFR_blue1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
-            phir.append(quad(integrands.integrand_SFR_red1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            # phib.append(quad(integrands.integrand_SFR_blue1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
+            # phir.append(quad(integrands.integrand_SFR_red1, min_mass, max_mass, args=(element, params, gsmf_params))[0])
         counter += 1
         print(phi_test)
         if counter == 99:
             ax[0,0].plot(SFR, np.log10(phi), color = 'k', alpha = 0.05, label = 'Total')
-            ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05, label = 'Blue only')
-            ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05, label = 'Red only')
+            # ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05, label = 'Blue only')
+            # ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05, label = 'Red only')
             ax[0,1].plot(SFR, phi*(SFR[1]-SFR[0])*10000, color = 'k', alpha = 0.05, label = 'Total')
-            ax[0,1].plot(SFR, phib*(SFR[1]-SFR[0])*10000, color = 'b', alpha = 0.05, label = 'Blue only')
-            ax[0,1].plot(SFR, phir*(SFR[1]-SFR[0])*10000, color = 'r', alpha = 0.05, label = 'Red only')
+            # ax[0,1].plot(SFR, phib*(SFR[1]-SFR[0])*10000, color = 'b', alpha = 0.05, label = 'Blue only')
+            # ax[0,1].plot(SFR, phir*(SFR[1]-SFR[0])*10000, color = 'r', alpha = 0.05, label = 'Red only')
             # ax[0,0].plot(SFR, np.log10(phi_test), color = 'g', alpha = 0.05, label = 'test')
         else:
             ax[0,0].plot(SFR, np.log10(phi), color = 'k', alpha = 0.05)
-            ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05)
-            ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05)
+            # ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05)
+            # ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05)
             ax[0,1].plot(SFR, np.array(phi)*(SFR[1]-SFR[0])*10000, color = 'k', alpha = 0.05)
-            ax[0,1].plot(SFR, np.array(phib)*(SFR[1]-SFR[0])*10000, color = 'b', alpha = 0.05)
-            ax[0,1].plot(SFR, np.array(phir)*(SFR[1]-SFR[0])*10000, color = 'r', alpha = 0.05)
+            # ax[0,1].plot(SFR, np.array(phib)*(SFR[1]-SFR[0])*10000, color = 'b', alpha = 0.05)
+            # ax[0,1].plot(SFR, np.array(phir)*(SFR[1]-SFR[0])*10000, color = 'r', alpha = 0.05)
     ax[0,1].text(0,0, str(np.sum(np.array(phi)*(SFR[1]-SFR[0])*10000)))
             # ax[0,0].plot(SFR, np.log10(phi_test), color = 'g', alpha = 0.05)
     # for params in samples2[np.random.randint(len(samples2), size=100)]:
@@ -1114,6 +1122,7 @@ def m_gas_ratio(det):
     ax[0,1].set_ylim(-10,0)
     plt.savefig('img/atomic_gas_fraction.pdf')
 
+
 popts = pd.read_csv('bestfits.csv')
 mstars = np.linspace(7.6,12.0,45)
 
@@ -1335,12 +1344,12 @@ print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000,
 print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
 
 mass_functions(gsmf_params)
-global m_step
-mass_steps = np.linspace(8,12,9)
-for idx, element in enumerate(mass_steps):
-    m_step = element
-    fname = 'sfr_hist_double' + str(element)
-    sfr_hist_only(samples5, samples6, 0, 20, gsmf_params, fname)
+# global m_step
+# mass_steps = np.linspace(8,12,9)
+# for idx, element in enumerate(mass_steps):
+#     m_step = element
+fname = 'sfr_hist_double' #+ str(element)
+sfr_hist_only(samples5, samples6, 0, 20, gsmf_params, fname)
 MHI_mf_only(samples5, samples6, -5, 3, 0, 12, gsmf_params)
 
 sfrmplane(GAMA, samples5, samples6)
