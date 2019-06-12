@@ -27,6 +27,30 @@ from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
 
+def plot_samples_full(sampler, ndim, fname, l):
+    fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
+    samples = sampler.get_chain()
+    labels = l
+    for i in range(ndim):
+        ax = axes[i]
+        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.set_xlim(0, len(samples))
+        ax.set_ylabel(labels[i])
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+    axes[-1].set_xlabel("step number");
+    plt.savefig('img/sampler' + fname + '.pdf')
+
+def plot_corner_full(samples_input, fname):
+    corner.corner(  samples_input,
+                    labels=[r"$\rho$", r"$M_{*}$", r"$\alpha$"],
+                    truths=(np.median(samples_input[:, 0]),
+                    np.median(samples_input[:, 1]),
+                    np.median(samples_input[:, 2])),
+                  truth_color="k",
+                  quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    plt.savefig('img/corner/' + fname)
+
+
 def plot_samples_3(sampler, ndim, fname):
     fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
     samples = sampler.get_chain()
@@ -421,45 +445,30 @@ def log_prob_SFR_MH2(params):
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 xCOLDGASS_data = read_COLD_GASS()
 detections = xCOLDGASS_data[xCOLDGASS_data['LIM_LOGMH2'] == 0]
-xCOLDGASS_data = xCOLDGASS_data[np.isfinite(xCOLDGASS_data['LOGSFR_BEST'])]
-xCOLDGASS_data = xCOLDGASS_data[np.isfinite(xCOLDGASS_data['MH2'])]
-xCOLDGASS_nondet = xCOLDGASS_data[xCOLDGASS_data['LOGMH2_ERR']==0]
-xCOLDGASS_data = xCOLDGASS_data[xCOLDGASS_data['LOGMH2_ERR']>0]
-xCOLDGASS_nondet['LOGMH2_ERR'] = 0.14
-CGx1, CGy1, CGxerr, CGyerr = xCOLDGASS_data['LOGSFR_BEST'].values, xCOLDGASS_data['MH2'].values, xCOLDGASS_data['LOGSFR_ERR'].values, xCOLDGASS_data['LOGMH2_ERR'].values
-CGx2, CGy2, CGxerr2, CGyerr2 = xCOLDGASS_nondet['LOGSFR_BEST'].values, xCOLDGASS_nondet['MH2'].values, xCOLDGASS_nondet['LOGSFR_ERR'].values, xCOLDGASS_nondet['LOGMH2_ERR'].values
-CGS1 = S_error(CGxerr, CGyerr)
-CGS2 = S_error(CGxerr2, [0.14])
-global COLD_GASS_data
-COLD_GASS_data = CGx1, CGx2, CGy1, CGy2, CGS1, CGS2
+# xCOLDGASS_data = xCOLDGASS_data[np.isfinite(xCOLDGASS_data['LOGSFR_BEST'])]
+# xCOLDGASS_data = xCOLDGASS_data[np.isfinite(xCOLDGASS_data['MH2'])]
+# xCOLDGASS_nondet = xCOLDGASS_data[xCOLDGASS_data['LOGMH2_ERR']==0]
+# xCOLDGASS_data = xCOLDGASS_data[xCOLDGASS_data['LOGMH2_ERR']>0]
+# xCOLDGASS_nondet['LOGMH2_ERR'] = 0.14
+# CGx1, CGy1, CGxerr, CGyerr = xCOLDGASS_data['LOGSFR_BEST'].values, xCOLDGASS_data['MH2'].values, xCOLDGASS_data['LOGSFR_ERR'].values, xCOLDGASS_data['LOGMH2_ERR'].values
+# CGx2, CGy2, CGxerr2, CGyerr2 = xCOLDGASS_nondet['LOGSFR_BEST'].values, xCOLDGASS_nondet['MH2'].values, xCOLDGASS_nondet['LOGSFR_ERR'].values, xCOLDGASS_nondet['LOGMH2_ERR'].values
+# CGS1 = S_error(CGxerr, CGyerr)
+# CGS2 = S_error(CGxerr2, [0.14])
+# global COLD_GASS_data
+# COLD_GASS_data = CGx1, CGx2, CGy1, CGy2, CGS1, CGS2
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # parameter estimation for the SFR-MH2 scaling relation
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-nwalkers, ndim = 200, 3
-g = [.85, 8.92, -1.3]
-pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-sampler1 = emcee.EnsembleSampler(nwalkers, ndim, log_prob_SFR_MH2)
-sampler1.run_mcmc(pos, 500, progress=True)
-samples1 = sampler1.chain[:, 250:, :].reshape((-1, ndim))
-plot_samples_3(sampler1, ndim, '_sfr_mh2_fit')
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# estimate the H2 masses for the non-detections
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-N = 200
-xCOLDGASS_nondet['MH2_estimated'] = 0
-xCOLDGASS_nondet['MH2_estimated_err'] = 0
-for idx, row in xCOLDGASS_nondet.iterrows():
-    masses = []
-    for c1, c2, lnc in samples1[np.random.randint(len(samples1), size=N)]:
-        # print (row['LOGMSTAR'], c1, c2, c1*row['LOGMSTAR'] + c2 + np.random.normal(0, np.exp(lnc)))
-        masses.append(c1*row['LOGSFR_BEST'] + c2 + np.random.normal(0, np.exp(lnc)))
-    xCOLDGASS_nondet.loc[idx, 'MH2_estimated'] = np.mean(masses)
-    xCOLDGASS_nondet.loc[idx, 'MH2_estimated_err'] = np.std(masses)
-print (xCOLDGASS_nondet)
-x11 = np.linspace(7,9,100)
-plt.scatter(xCOLDGASS_nondet['MH2'], xCOLDGASS_nondet['MH2_estimated'])
-plt.plot(x11,x11)
-plt.show()
+# nwalkers, ndim = 200, 3
+# g = [.85, 8.92, -1.3]
+# pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+# sampler1 = emcee.EnsembleSampler(nwalkers, ndim, log_prob_SFR_MH2)
+# sampler1.run_mcmc(pos, 500, progress=True)
+# samples1 = sampler1.chain[:, 250:, :].reshape((-1, ndim))
+# plot_samples_3(sampler1, ndim, '_sfr_mh2_fit')
+# np.savetxt('data/SFR_MH2_chain.txt', samples1)
+# read from file
+samples1 = np.loadtxt('data/SFR_MH2_chain.txt')
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # do the binning and bootstrapping for the Schechter parameter estimation
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -474,32 +483,76 @@ start_i = np.where(np.array(prods[2]) > 8.2)[0][0]
 error_arr = bootstrap_with_replacement(xCOLDGASS_data, int(len(xCOLDGASS_data)*.8), bins)
 error_arr_d = bootstrap_with_replacement(detections, int(len(detections)*.8), bins)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# estimate the H2 masses for the non-detections
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+N = 200
+print (len(xCOLDGASS_data))
+xCOLDGASS_data['MH2_estimated'] = 0
+xCOLDGASS_data['MH2_estimated_err'] = 0
+for idx, row in xCOLDGASS_data.iterrows():
+    # only work out the estimated error for the non-detections
+    if row['LOGMH2_ERR'] == 0:
+        masses = []
+        for c1, c2, lnc in samples1[np.random.randint(len(samples1), size=N)]:
+            # print (row['LOGMSTAR'], c1, c2, c1*row['LOGMSTAR'] + c2 + np.random.normal(0, np.exp(lnc)))
+            masses.append(c1*row['LOGSFR_BEST'] + c2 + np.random.normal(0, np.exp(lnc)))
+        xCOLDGASS_data.loc[idx, 'MH2_estimated'] = np.mean(masses)
+        xCOLDGASS_data.loc[idx, 'MH2_estimated_err'] = np.std(masses)
+# now combine the detections and predicted masses for the non-detections
+xCOLDGASS_data['MH2'] = xCOLDGASS_data['LOGMH2'] + xCOLDGASS_data['MH2_estimated']
+xCOLDGASS_data['MH2_est_err'] = xCOLDGASS_data['LOGMH2_ERR'] + xCOLDGASS_data['MH2_estimated_err']
+prods_d2 = Schechter(xCOLDGASS_data, bins)
+error_arr_d2 = bootstrap_with_replacement(xCOLDGASS_data, int(len(xCOLDGASS_data)*.8), bins)
+print ('prods', prods[1])
+print ('prods', prods_d[1])
+print ('prods', prods_d2[1])
+print (len(xCOLDGASS_data))
+print (len(detections))
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # do the emcee parameter estimation for the two schechter fits
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 nwalkers, ndim = 200, 3
 g = [0.0001, 9.5, -1.1]
 pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+param_names = ['rhostar', 'logM', 'alpha']
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # all the data
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sampler5 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods[2][start_i:], prods[1][start_i:], error_arr[start_i:]))
 sampler5.run_mcmc(pos, 1000, progress=True)
-# plot_samples_full(sampler5, ndim, 'mainsequence_full')
+plot_samples_full(sampler5, ndim, 'MH2_observed_all', param_names)
 samples5 = sampler5.chain[:, 500:, :].reshape((-1, ndim))
+plot_corner_full(samples5, 'MH2_observed_all')
 phistar2 = (np.median(samples5[:, 0]))
 Mstar2 = (np.median(samples5[:, 1]))
 alpha2 = (np.median(samples5[:, 2]))
+print (phistar2, Mstar2, alpha2)
 # np.savetxt('data/samples5.txt', samples5)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # detections only
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sampler6 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods_d[2][start_i:], prods_d[1][start_i:], error_arr_d[start_i:]))
 sampler6.run_mcmc(pos, 1000, progress=True)
-# plot_samples_full(sampler5, ndim, 'mainsequence_full')
+plot_samples_full(sampler5, ndim, 'MH2_observed_detections', param_names)
 samples6 = sampler6.chain[:, 500:, :].reshape((-1, ndim))
+plot_corner_full(samples6, 'MH2_observed_detections')
 phistar3 = (np.median(samples6[:, 0]))
 Mstar3 = (np.median(samples6[:, 1]))
 alpha3 = (np.median(samples6[:, 2]))
+print (phistar3, Mstar3, alpha3)
+# np.savetxt('data/samples5.txt', samples5)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# estimated masses for non-detections
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sampler7 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods_d2[2][start_i:], prods_d2[1][start_i:], error_arr_d2[start_i:]))
+sampler7.run_mcmc(pos, 1000, progress=True)
+plot_samples_full(sampler5, ndim, 'MH2_observed_estimated', param_names)
+samples7 = sampler7.chain[:, 500:, :].reshape((-1, ndim))
+plot_corner_full(samples7, 'MH2_observed_estimated')
+phistar4 = (np.median(samples7[:, 0]))
+Mstar4 = (np.median(samples7[:, 1]))
+alpha4 = (np.median(samples7[:, 2]))
+print (phistar4, Mstar4, alpha4)
 # np.savetxt('data/samples5.txt', samples5)
 
 p_m = np.array([7.813, 8.059, 8.305, 8.551, 8.797, 9.043, 9.289, 9.535, 9.781, 10.027])
@@ -517,8 +570,9 @@ p_error = np.array([0.00026085, 0.00032034, 0.00050953, 0.00054069, 0.00057808, 
 fig, ax = plt.subplots(nrows = 1, ncols = 3, squeeze=False, figsize=(15,5))
 ax[0,0].errorbar(prods[2], prods[1], yerr = error_arr, fmt=".k", capsize=0, zorder = 99)
 ax[0,0].errorbar(prods_d[2], prods_d[1], yerr = error_arr_d, fmt=".b", capsize=0, zorder = 99)
+ax[0,0].errorbar(prods_d2[2], prods_d2[1], yerr = error_arr_d2, fmt=".r", capsize=0, zorder = 99)
 # ax[0,0].errorbar(p_m, p_phi, yerr = p_error, fmt=".b", capsize=0, zorder = 20)
-omegas, omegas2 = [], []
+omegas, omegas2, omegas3 = [], [], []
 for m1, b, f1 in samples5[np.random.randint(len(samples5), size=500)]:
     ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="g", alpha=0.1)
     ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="g", alpha=0.1)
@@ -529,19 +583,30 @@ for m1, b, f1 in samples6[np.random.randint(len(samples6), size=500)]:
     ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="c", alpha=0.1)
     # print (OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1))))
     omegas2.append(OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*1E5)
+for m1, b, f1 in samples7[np.random.randint(len(samples7), size=500)]:
+    ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="r", alpha=0.1)
+    ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="r", alpha=0.1)
+    # print (OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1))))
+    omegas3.append(OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*1E5)
 Mstar = 9.35
 phistar1 = 4.29E-3
 alpha1 = -1.03
 phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)))
 phi_Mstar_double2 = np.log(10) * np.exp(-np.power(10,M-Mstar2)) * (phistar2*np.power(10,(alpha2+1)*(M-Mstar2)))
+phi_Mstar_double3 = np.log(10) * np.exp(-np.power(10,M-Mstar3)) * (phistar3*np.power(10,(alpha3+1)*(M-Mstar3)))
+phi_Mstar_double4 = np.log(10) * np.exp(-np.power(10,M-Mstar4)) * (phistar4*np.power(10,(alpha4+1)*(M-Mstar4)))
 # phi_Mstar_double3 = np.log(10) * np.exp(-np.power(10,M-Mstar3)) * (phistar3*np.power(10,(alpha3+1)*(M-Mstar3)))
 # ax[0,0].plot(M, phi_Mstar_double, color = 'c')
 # plt.plot(M, schechfunc(np.power(10,M), phistar2, 10**Mstar2, alpha2), color = 'c', linestyle = '--', linewidth = 5)
-ax[0,0].plot(M, phi_Mstar_double2, color = 'k')
+ax[0,0].plot(M, phi_Mstar_double2, color = 'k', linestyle = '-')
+ax[0,0].plot(M, phi_Mstar_double3, color = 'k', linestyle = '--')
+ax[0,0].plot(M, phi_Mstar_double4, color = 'k', linestyle = ':')
 ax[0,2].hist(omegas, bins = 30, alpha = 0.5, color = 'g')
 ax[0,2].hist(omegas2, bins = 30, alpha = 0.5, color = 'c')
+ax[0,2].hist(omegas3, bins = 30, alpha = 0.5, color = 'r')
 ax[0,2].text(4,10,str(round(np.median(omegas2),2)) + r'$\pm$' + str(round(np.std(omegas2),2)))
 ax[0,2].text(6,10,str(round(np.median(omegas),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
+ax[0,2].text(8,10,str(round(np.median(omegas3),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
 # plt.plot(M, phi_Mstar_double3, color = 'b')
 ax[0,0].axvline(8.2)
 ax[0,0].set_ylim(0.00005, 0.05)

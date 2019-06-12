@@ -36,6 +36,33 @@ from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
 
+
+def log_likelihood(theta, x, y, yerr):
+    Mstar, phistar1, phistar2, alpha1, alpha2 = theta
+    # model = np.log(10.0) * \
+    # ((phistar1 * np.power((np.power(10, x) / np.power(10, Mstar)), (alpha1 + 1))) + \
+    # (phistar2 * np.power((np.power(10, x) / np.power(10, Mstar)), (alpha2 + 1)))) * \
+    # np.exp(-1 * np.power(10, x) / np.power(10, Mstar))
+    model = models.double_schechter(x, theta)
+    sigma2 = yerr ** 2
+    return -0.5 * np.sum((y - model) ** 2 / sigma2 + np.log(2 * np.pi * sigma2))
+
+def log_prior(theta):
+    Mstar, phistar1, phistar2, alpha1, alpha2 = theta
+    if 10.0 < Mstar < 11.0 and \
+    0.000001 < phistar1 < 0.005 and \
+    0.000001 < phistar2 < 0.005 and \
+    -1.0 < alpha1 < 0.0 and \
+    -2.0 < alpha2 < -1.0:
+        return 0.0
+    return -np.inf
+
+def log_probability(theta, x, y, yerr):
+    lp = log_prior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood(theta, x, y, yerr)
+
 def plot_corner_full(samples_input, fname):
     samples_input[:, 3] = np.exp(samples_input[:, 3])
     samples_input[:, 6] = np.exp(samples_input[:, 6])
@@ -636,9 +663,18 @@ def MHI_mf_only(samples1, samples2, min_sfr, max_sfr, min_mass, max_mass, gsmf_p
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         phi, phib, phir = [], [], []
         for idx, element in enumerate(MHI):
-            phi.append(dblquad(integrands.integrand_MHI_total, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-            phib.append(dblquad(integrands.integrand_MHI_blue, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-            phir.append(dblquad(integrands.integrand_MHI_red, min_sfr, max_sfr, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+            phi.append(dblquad(integrands.integrand_MHI_total, min_sfr, max_sfr,
+                                lambda SFR: min_mass, lambda SFR: max_mass,
+                                args=(element, params, gsmf_params),
+                                epsrel = 1e-8, epsabs = 0)[0])
+            phib.append(dblquad(integrands.integrand_MHI_blue, min_sfr, max_sfr,
+                                lambda SFR: min_mass, lambda SFR: max_mass,
+                                args=(element, params, gsmf_params),
+                                epsrel = 1e-8, epsabs = 0)[0])
+            phir.append(dblquad(integrands.integrand_MHI_red, min_sfr, max_sfr,
+                                lambda SFR: min_mass, lambda SFR: max_mass,
+                                args=(element, params, gsmf_params),
+                                epsrel = 1e-8, epsabs = 0)[0])
         counter += 1
         if counter == 9:
             ax[0,0].plot(MHI, np.log10(phi), color = 'k', alpha = 0.05, label = 'Total')
@@ -957,7 +993,7 @@ def exp_function2(x, a1, a2, a3, a4):
     y[x > a4] = 1
     return y
 
-def mass_functions(gsmf_params):
+def mass_functions(gsmf_params, samples1):
     Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
     fig, ax = plt.subplots(nrows = 1, ncols = 2, squeeze=False, figsize=(12,6))
 
@@ -967,6 +1003,17 @@ def mass_functions(gsmf_params):
     baldry = np.array(baldry)/1000
     baldry_err = (np.array(baldry_err)/1000)/(baldry*np.log(10))
 
+    ndim, nwalkers = 5, 100
+    param_labels = ['Mstar', 'phistar1', 'phistar2', 'alpha1', 'alpha2']
+    g = [10.66, 0.00396, -0.35, 0.00079, -1.47]
+    # g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
+    pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    sampler5 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (xbaldry, baldry, baldry_err))
+    sampler5.run_mcmc(pos, 1000, progress=True)
+    af = sampler5.acceptance_fraction
+    print("Mean acceptance fraction:", np.mean(af))
+    plot_samples_full(sampler5, ndim, 'double_schechter1', param_labels)
+    samples5 = sampler5.chain[:, 500:, :].reshape((-1, ndim))
     # Baldry = {'Mstar': 10.66, 'phistar1': 3.96E-3, 'phistar2': 0.79E-3, 'alpha1': - 0.35, 'alpha2': - 1.47}
     # GAMA18 = {'Mstar': 10.78, 'phistar1': 2.93E-3, 'phistar2': 0.63E-3, 'alpha1': - 0.62, 'alpha2': - 1.50}
 
@@ -977,7 +1024,6 @@ def mass_functions(gsmf_params):
     # (phistar1*np.power(10,(alpha1+1)*(M-Mstar)) + \
     # phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
     phi_Mstar_Baldry = schechter.double_schechter(M, gsmf_params)
-    phi_Mstar_Baldry2 = schechter.double_schechter_linear(M2, gsmf_params)
     # phi_Mstar_Baldry3 = schechterL(M, 0.71E-3, -1.45, 10.72)
     # print (phi_Mstar_Baldry)
     # print (phi_Mstar_Baldry2)
@@ -996,9 +1042,17 @@ def mass_functions(gsmf_params):
     # (GAMA18['phistar1']*np.power(10,(GAMA18['alpha1']+1)*(M-GAMA18['Mstar'])) + \
     # GAMA18['phistar2']*np.power(10,(GAMA18['alpha2']+1)*(M-GAMA18['Mstar'])))
     # print (np.log10(phi_Mstar_Baldry) - np.log10(phi_Mstar_Baldry2*M2))
+    for params in samples5[np.random.randint(len(samples5), size=10)]:
+        Mstar, phistar1, phistar2, alpha1, alpha2 = params
+        params = Mstar, phistar1, phistar2, alpha1, alpha2
+        print (np.log10(schechter.double_schechter(M, params)))
+        ax[0,0].plot(M, np.log10(schechter.double_schechter(M, params)), color = 'k')
+    for params in samples1[np.random.randint(len(samples1), size=10)]:
+        b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
+        ax[0,0].plot(M, np.log10(schechter.double_schechter(M, gsmf_params)*models.f_passive(M, alpha, beta, zeta)), color = 'r')
+        ax[0,0].plot(M, np.log10(schechter.double_schechter(M, gsmf_params)*(1-models.f_passive(M, alpha, beta, zeta))), color = 'b')
 
     ax[0,0].plot(M, np.log10(phi_Mstar_Baldry), label = 'Baldry')
-    ax[0,0].plot(np.log10(M2), np.log10(phi_Mstar_Baldry2*M2), label = 'Baldry', linestyle = '--')
     # ax[0,0].plot(np.log10(M2), np.log10(phi_Mstar_Baldry3), label = 'Baldry', linestyle = ':')
     # ax[0,0].plot(M, np.log10(phi_peak1), label = 'Baldry', color = 'b')
     # ax[0,0].plot(M, np.log10(phi_peak2), label = 'Baldry', color = 'g')
@@ -1343,13 +1397,13 @@ print ('Analytical Answer Double Schechter = ', schechter.double_schechter_analy
 print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
 print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
 
-mass_functions(gsmf_params)
+mass_functions(gsmf_params, samples6)
 # global m_step
 # mass_steps = np.linspace(8,12,9)
 # for idx, element in enumerate(mass_steps):
 #     m_step = element
 fname = 'sfr_hist_double' #+ str(element)
-sfr_hist_only(samples5, samples6, 0, 20, gsmf_params, fname)
+# sfr_hist_only(samples5, samples6, 0, 20, gsmf_params, fname)
 MHI_mf_only(samples5, samples6, -5, 3, 0, 12, gsmf_params)
 
 sfrmplane(GAMA, samples5, samples6)
