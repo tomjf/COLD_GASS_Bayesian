@@ -1003,17 +1003,17 @@ def mass_functions(gsmf_params, samples1):
     baldry = np.array(baldry)/1000
     baldry_err = (np.array(baldry_err)/1000)/(baldry*np.log(10))
 
-    ndim, nwalkers = 5, 100
-    param_labels = ['Mstar', 'phistar1', 'phistar2', 'alpha1', 'alpha2']
-    g = [10.66, 0.00396, -0.35, 0.00079, -1.47]
-    # g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
-    pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler5 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (xbaldry, baldry, baldry_err))
-    sampler5.run_mcmc(pos, 1000, progress=True)
-    af = sampler5.acceptance_fraction
-    print("Mean acceptance fraction:", np.mean(af))
-    plot_samples_full(sampler5, ndim, 'double_schechter1', param_labels)
-    samples5 = sampler5.chain[:, 500:, :].reshape((-1, ndim))
+    # ndim, nwalkers = 5, 100
+    # param_labels = ['Mstar', 'phistar1', 'phistar2', 'alpha1', 'alpha2']
+    # g = [10.66, 0.00396, -0.35, 0.00079, -1.47]
+    # # g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
+    # pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    # sampler5 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (xbaldry, baldry, baldry_err))
+    # sampler5.run_mcmc(pos, 1000, progress=True)
+    # af = sampler5.acceptance_fraction
+    # print("Mean acceptance fraction:", np.mean(af))
+    # plot_samples_full(sampler5, ndim, 'double_schechter1', param_labels)
+    # samples5 = sampler5.chain[:, 500:, :].reshape((-1, ndim))
     # Baldry = {'Mstar': 10.66, 'phistar1': 3.96E-3, 'phistar2': 0.79E-3, 'alpha1': - 0.35, 'alpha2': - 1.47}
     # GAMA18 = {'Mstar': 10.78, 'phistar1': 2.93E-3, 'phistar2': 0.63E-3, 'alpha1': - 0.62, 'alpha2': - 1.50}
 
@@ -1042,11 +1042,11 @@ def mass_functions(gsmf_params, samples1):
     # (GAMA18['phistar1']*np.power(10,(GAMA18['alpha1']+1)*(M-GAMA18['Mstar'])) + \
     # GAMA18['phistar2']*np.power(10,(GAMA18['alpha2']+1)*(M-GAMA18['Mstar'])))
     # print (np.log10(phi_Mstar_Baldry) - np.log10(phi_Mstar_Baldry2*M2))
-    for params in samples5[np.random.randint(len(samples5), size=10)]:
-        Mstar, phistar1, phistar2, alpha1, alpha2 = params
-        params = Mstar, phistar1, phistar2, alpha1, alpha2
-        print (np.log10(schechter.double_schechter(M, params)))
-        ax[0,0].plot(M, np.log10(schechter.double_schechter(M, params)), color = 'k')
+    # for params in samples5[np.random.randint(len(samples5), size=10)]:
+    #     Mstar, phistar1, phistar2, alpha1, alpha2 = params
+    #     params = Mstar, phistar1, phistar2, alpha1, alpha2
+    #     print (np.log10(schechter.double_schechter(M, params)))
+    #     ax[0,0].plot(M, np.log10(schechter.double_schechter(M, params)), color = 'k')
     for params in samples1[np.random.randint(len(samples1), size=10)]:
         b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
         ax[0,0].plot(M, np.log10(schechter.double_schechter(M, gsmf_params)*models.f_passive(M, alpha, beta, zeta)), color = 'r')
@@ -1176,7 +1176,7 @@ def m_gas_ratio(det):
     ax[0,1].set_ylim(-10,0)
     plt.savefig('img/atomic_gas_fraction.pdf')
 
-
+nose.run(argv=[__file__, 'nose_tests.py'])
 popts = pd.read_csv('bestfits.csv')
 mstars = np.linspace(7.6,12.0,45)
 
@@ -1386,16 +1386,16 @@ M = np.linspace(7,12,100)
 # phi_Mstar_double = double_schechter_peak(M, 9.5, gsmf_params, -4)
 # phi_Mstar_double = double_schechter_peak(M, 10.0, gsmf_params, -4)
 
-print ('Integral p(SFR_T|M*)dSFR = ', quad(integrands.integrand_SFR1c, -np.inf, np.inf, args=(10, samples6[10,:]))[0])
-# print ('testing p(SFR|M*)*phi(M*)', dblquad(integrands.integrand_MHI_total, -np.inf, np.inf,, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
-print ('Integral p(SFR_x|M*)dSFR = ', quad(models.Gaussian_Conditional_Probability, -200, 200, args = (0,-1.1))[0])
-
-print ('Analytical Answer Single Schechter = ', schechter.single_schechter_analytic(np.power(10,8), gsmf_params))
-print ('Analytical Answer Double Schechter = ', schechter.double_schechter_analytic(np.power(10,8), gsmf_params))
-# print ('(Linear) Integral phi(M*)dM* = ', quad(double_schechter_linear, 0, 10E13, args=(np.array(gsmf_params)))[0])
-# print ('(Linear) Integral phi(M*)dM* = ', quad(single_schechter_linear, np.power(10,8), np.inf, args=(np.array(gsmf_params)))[0])
-print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
-print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
+# print ('Integral p(SFR_T|M*)dSFR = ', quad(integrands.integrand_SFR1c, -np.inf, np.inf, args=(10, samples6[10,:]))[0])
+# # print ('testing p(SFR|M*)*phi(M*)', dblquad(integrands.integrand_MHI_total, -np.inf, np.inf,, lambda SFR: min_mass, lambda SFR: max_mass, args=(element, params, gsmf_params))[0])
+# print ('Integral p(SFR_x|M*)dSFR = ', quad(models.Gaussian_Conditional_Probability, -200, 200, args = (0,-1.1))[0])
+#
+# print ('Analytical Answer Single Schechter = ', schechter.single_schechter_analytic(np.power(10,8), gsmf_params))
+# print ('Analytical Answer Double Schechter = ', schechter.double_schechter_analytic(np.power(10,8), gsmf_params))
+# # print ('(Linear) Integral phi(M*)dM* = ', quad(double_schechter_linear, 0, 10E13, args=(np.array(gsmf_params)))[0])
+# # print ('(Linear) Integral phi(M*)dM* = ', quad(single_schechter_linear, np.power(10,8), np.inf, args=(np.array(gsmf_params)))[0])
+# print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
+# print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
 
 mass_functions(gsmf_params, samples6)
 # global m_step
