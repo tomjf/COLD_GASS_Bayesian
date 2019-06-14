@@ -1,5 +1,7 @@
 import numpy as np
 import mpmath
+
+# import COLD GASS functions
 import models
 
 def log_schechter_true(logL, log_phi, log_L0, alpha):

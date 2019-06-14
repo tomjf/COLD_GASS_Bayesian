@@ -1,10 +1,12 @@
 import numpy as np
 from scipy.integrate import quad, dblquad, nquad
 
+# import COLD GASS functions
 import schechter
 import integrands
 import models
 
+# check the integral of the total PDF for the SFR-M plane is equal to 1
 def test_integral_pSFR_total_M_dSFR():
     samples4 = np.loadtxt('data/samples4.txt')
     samples6 = np.loadtxt('data/dbl_gauss_straight_line.txt')
@@ -13,22 +15,30 @@ def test_integral_pSFR_total_M_dSFR():
     print (p_SFR_M_integrated)
     assert round(p_SFR_M_integrated,10) == 1.0
 
+# check the integral of the one of the PDFs for the SFR-M plane is equal to 1
 def test_integral_pSFR_total_X_dSFR():
     p_SFR_M_integrated = quad(models.Gaussian_Conditional_Probability, -np.inf, np.inf, args=(0, 1.1))[0]
     assert round(p_SFR_M_integrated,10) == 1.0
 
+# check the integral of the single schechter mass function written in log_10 M*
+# equals the analytical solution
 def test_integral_phi_single_numerical_vs_analytic():
     gsmf_params = 10.66, 3.96E-3, 0.79E-3, - 0.35, - 1.47
     analytical = schechter.single_schechter_analytic(np.power(10,8), gsmf_params)
     numerical = quad(schechter.single_schechter, 8, 20, args=(np.array(gsmf_params)))[0]
     assert round(analytical,10) == round(numerical,10)
 
+# check the integral of the double schechter mass function written in log_10 M*
+# equals the analytical solution
 def test_integral_phi_double_numerical_vs_analytic():
     gsmf_params = 10.66, 3.96E-3, 0.79E-3, - 0.35, - 1.47
     analytical = schechter.double_schechter_analytic(np.power(10,8), gsmf_params)
     numerical = quad(schechter.double_schechter, 8, 15, args=(np.array(gsmf_params)))[0]
     assert round(analytical,10) == round(numerical,10)
 
+
+# check the integral of the model sfr histogram has the same number density as
+# the input double schechter mass function
 def test_number_conserved_full_schechter():
     samples4 = np.loadtxt('data/samples4.txt')
     samples6 = np.loadtxt('data/dbl_gauss_straight_line.txt')
@@ -49,6 +59,8 @@ def test_number_conserved_full_schechter():
     print ('sfr function', Num_Dens_SFR, err_sfr)
     assert round(Num_Dens_MF,8) == round(Num_Dens_SFR,8)
 
+# check the integral of the model sfr histogram has the same number density as
+# the input peaked mass function
 def test_number_conserved_full_peak():
     samples4 = np.loadtxt('data/samples4.txt')
     samples6 = np.loadtxt('data/dbl_gauss_straight_line.txt')
