@@ -31,7 +31,17 @@ def read_GAMA():
     GAMA = GAMA[GAMA['logSFR'] > - 6.0]
     GAMAb = GAMA[GAMA['ColorFlag']==1]
     GAMAr = GAMA[GAMA['ColorFlag']==2]
-    print ('GAMA min and maz zs')
-    print (np.min(GAMA['z']))
-    print (np.max(GAMA['z']))
     return GAMA, GAMAb, GAMAr
+
+def read_SDSS():
+    SDSS = fits.open('data/Skyserver_query.fits')
+    SDSS = Table(SDSS[1].data).to_pandas()
+    SDSS = SDSS[SDSS['sfr_tot_p50'] > -9999]
+    SDSS = SDSS[SDSS['mstellar_median'] > 7]
+    print (min(SDSS['sfr_tot_p50']))
+    print (max(SDSS['sfr_tot_p50']))
+    print (min(SDSS['mstellar_median']))
+    print (max(SDSS['mstellar_median']))
+    print (SDSS.columns)
+    print (SDSS)
+    return SDSS

@@ -158,8 +158,8 @@ def log_mainsequence_priors_full1(params):
         0.0 < b2 < 3.0 and \
         -20.0 < b3 < -5.0 and \
         -5.0 < lnb < 5.0 and \
-        0.2 < r1 < 1.5 and \
-        -15.0 < r2 < -5.0 and \
+        0.0 < r1 < 1.5 and \
+        -15.0 < r2 < -1.0 and \
         -5.0 < lnr < 5.0 and \
         9.0 < alpha < 12.0 and \
         -2.0 < beta < 0.0 and \
@@ -194,6 +194,27 @@ def log_marg_mainsequence_full1(params):
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta = params
     x, y, xerr, yerr = GAMA_data
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # total likelihood
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    DeltaN_b = y - (b1*x*x) - (b2*x) - b3
+    DeltaN_r = y - (r1*x) - r2
+    Sigma2_b = np.square(xerr)*np.square((2*b1*x) + b2) + np.square(yerr) + np.exp(2*lnb)
+    Sigma2_r = np.square(xerr)*np.square(r1) + np.square(yerr) + np.exp(2*lnr)
+    c = .5*(1+np.tanh(zeta))
+    f_pass = (c + ((1-c)/(1+np.power(np.power(10,x-alpha), beta))))
+    # print ('N', N)
+    blue_part = ((1-f_pass)/np.sqrt(2*np.pi*Sigma2_b))*np.exp(-np.square(DeltaN_b)/(2*Sigma2_b))
+    red_part = (f_pass/np.sqrt(2*np.pi*Sigma2_r))*np.exp(-np.square(DeltaN_r)/(2*Sigma2_r))
+    ll_sfrm = np.sum(np.log(blue_part + red_part))
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    return ll_sfrm + log_mainsequence_priors_full1(params)
+
+def log_marg_mainsequence_full_SDSS(params, x, y, xerr, yerr):
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # params
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta = params
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # total likelihood
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -49,7 +49,9 @@ def integrand_SFR_blue1(M, SFR, params, gsmf_params):
     fpass = models.f_passive(M, alpha, beta, zeta)
     # P_SFR_given_blue
     y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = models.Gaussian_Conditional_Probability(SFR, y_sforming, lnb)
+    # y_sforming = models.first_order(M, 1.037, - 0.077 - 10)
+    # y_sforming = models.Saintonge16_MS(M)
+    P_SFR_given_Mstar_blue = models.Gaussian_Conditional_Probability(SFR, y_sforming, -0.94)
     P_SFR_given_Mstar_total = (1-fpass)*P_SFR_given_Mstar_blue
     # return phi_SFR
     return phi_Mstar_double*P_SFR_given_Mstar_total
@@ -96,7 +98,9 @@ def integrand_SFR1b(M, SFR, params, gsmf_params):
     P_SFR_given_Mstar_red = models.Gaussian_Conditional_Probability(SFR, y_passive, lnr)
     # P_SFR_given_sforming
     y_sforming = (b1*M*M) + (b2*M) + b3
-    P_SFR_given_Mstar_blue = models.Gaussian_Conditional_Probability(SFR, y_sforming, lnb)
+    # y_sforming = models.first_order(M, 1.037, - 0.077 - 10)
+    # y_sforming = models.Saintonge16_MS(M)
+    P_SFR_given_Mstar_blue = models.Gaussian_Conditional_Probability(SFR, y_sforming, -0.94)
     # P_SFR_total
     P_SFR_given_Mstar_total = fpass*P_SFR_given_Mstar_red + (1-fpass)*P_SFR_given_Mstar_blue
     # return phi_SFR

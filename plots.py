@@ -43,15 +43,30 @@ def plot_corner_full(samples_input, fname):
                   quantiles=[0.16, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     plt.savefig('img/corner/' + fname)
 
-def sfrmplane(GAMA, samples3, samples6):
+def sfrmplane(GAMA, SDSS, samples3, samples6, samples_SDSS):
     fig, ax = plt.subplots(nrows = 1, ncols = 2, squeeze=False, figsize=(12,6))
     x = np.linspace(7,12,300)
-    ax[0,0].scatter(GAMA['logM*'], GAMA['logSFR'], s = 0.1, color = 'k')
+    # ax[0,0].scatter(GAMA['logM*'], GAMA['logSFR'], s = 0.1, color = 'k')
+    ax[0,0].errorbar(SDSS['mstellar_median'][:300], SDSS['sfr_tot_p50'][:300], xerr = SDSS['mstellar_err'][:300], yerr = SDSS['sfr_tot_p84'][:300] - SDSS['sfr_tot_p50'][:300], label = 'SDSS', fmt='o', markersize = 0.1, linewidth=0.1, capsize=0.1)
+    # print (SDSS['sfr_tot_p50'])
+    # ax[0,0].scatter(SDSS['mstellar_median'], SDSS['sfr_tot_p50'], s = 0.1, color = 'r')
     ax[0,0].plot(x, models.Saintonge16_MS(x), color = 'orange', label = 'Saintonge+16')
+    ax[0,0].plot(x, models.first_order(x, 1.037, - 0.077 - 10), color = 'g', label = 'Bull+16')
+    # print (models.second_order(x, np.median(samples3[:,0]), np.median(samples3[:,1]), np.median(samples3[:,2])))
     for b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh in samples3[np.random.randint(len(samples3), size=100)]:
         ax[0,0].plot(x, models.second_order(x, b1, b2, b3), alpha = 0.1, color = 'b')
         ax[0,0].plot(x, models.first_order(x, r1, r2), alpha = 0.1, color = 'r')
         ax[0,1].plot(x, models.f_passive(x, alpha, beta, zeta), color = 'g', alpha = 0.1)
+    for b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta in samples_SDSS[np.random.randint(len(samples_SDSS), size=100)]:
+        ax[0,0].plot(x, models.second_order(x, b1, b2, b3), alpha = 0.1, color = 'navy')
+        ax[0,0].plot(x, models.first_order(x, r1, r2), alpha = 0.1, color = 'crimson')
+        ax[0,1].plot(x, models.f_passive(x, alpha, beta, zeta), color = 'darkgreen', alpha = 0.1)
+    param1 = (np.median(samples3[:,0]))
+    param2 = (np.median(samples3[:,1]))
+    param3 = (np.median(samples3[:,2]))
+    print (param1, param2, param3)
+    ax[0,0].plot(x, models.second_order(x, param1, param2-0.1, param3), color = 'k', label = 'median')
+
     ax[0,0].set_xlabel(r"$\mathrm{\log_{10} M_{*}\, [M_{\odot}]}$")
     ax[0,0].set_ylabel(r"$\mathrm{\log_{10} SFR \, [M_{\odot}\, yr^{-1}]}$")
     ax[0,1].set_xlabel(r"$\mathrm{\log_{10} M_{*}\, [M_{\odot}]}$")
@@ -60,7 +75,7 @@ def sfrmplane(GAMA, samples3, samples6):
     ax[0,0].set_ylim(-5, 1.5)
     ax[0,1].set_xlim(7, 12)
     ax[0,1].set_ylim(0, 1)
-    ax[0,0].legend()
+    # ax[0,0].legend()
     plt.savefig('img/test.pdf')
 
 def mass_functions(gsmf_params, samples1):
@@ -122,7 +137,9 @@ def mass_functions(gsmf_params, samples1):
         ax[0,0].plot(M, np.log10(schechter.double_schechter(M, gsmf_params)*models.f_passive(M, alpha, beta, zeta)), color = 'r')
         ax[0,0].plot(M, np.log10(schechter.double_schechter(M, gsmf_params)*(1-models.f_passive(M, alpha, beta, zeta))), color = 'b')
 
-    ax[0,0].plot(M, np.log10(phi_Mstar_Baldry), label = 'Baldry')
+    ax[0,0].plot(M, np.log10(phi_Mstar_Baldry), label = 'Baldry+11')
+    Wright17_params = [10.78, 2.93E-3, 0.63E-3, -0.62, -1.50]
+    ax[0,0].plot(M, np.log10(schechter.double_schechter(M, Wright17_params)), label = 'Wright+17')
     # ax[0,0].plot(np.log10(M2), np.log10(phi_Mstar_Baldry3), label = 'Baldry', linestyle = ':')
     # ax[0,0].plot(M, np.log10(phi_peak1), label = 'Baldry', color = 'b')
     # ax[0,0].plot(M, np.log10(phi_peak2), label = 'Baldry', color = 'g')

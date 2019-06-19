@@ -44,7 +44,7 @@ def test_number_conserved_full_schechter():
     samples6 = np.loadtxt('data/dbl_gauss_straight_line.txt')
     samples6 = np.hstack((samples6, samples4[:len(samples6), -3:]))
     gsmf_params = 10.66, 3.96E-3, 0.79E-3, - 0.35, - 1.47
-    mmin, mmax = 0, 16
+    mmin, mmax = 7, 12
     sfrmin, sfrmax = -20, 20
     analytical = schechter.double_schechter_analytic(np.power(10,mmin), gsmf_params)
     Num_Dens_MF, err_m = quad(schechter.double_schechter, mmin, mmax,

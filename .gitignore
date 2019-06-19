@@ -18,3 +18,5 @@ test\.py
 log_normal\.py
 
 data/a99_HIMF\.dat
+
+__pycache__/
