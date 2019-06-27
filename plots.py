@@ -47,7 +47,10 @@ def sfrmplane(GAMA, SDSS, samples3, samples6, samples_SDSS):
     fig, ax = plt.subplots(nrows = 1, ncols = 2, squeeze=False, figsize=(12,6))
     x = np.linspace(7,12,300)
     # ax[0,0].scatter(GAMA['logM*'], GAMA['logSFR'], s = 0.1, color = 'k')
-    ax[0,0].errorbar(SDSS['mstellar_median'][:300], SDSS['sfr_tot_p50'][:300], xerr = SDSS['mstellar_err'][:300], yerr = SDSS['sfr_tot_p84'][:300] - SDSS['sfr_tot_p50'][:300], label = 'SDSS', fmt='o', markersize = 0.1, linewidth=0.1, capsize=0.1)
+    m_bins = np.linspace(8,12.4,23)
+    sfr_bins = np.linspace(-3.4,4.0,38)
+    ax[0,0].hist2d(SDSS['mstellar_median'], SDSS['sfr_tot_p50'], bins = [m_bins, sfr_bins])
+    # ax[0,0].errorbar(SDSS['mstellar_median'][:300], SDSS['sfr_tot_p50'][:300], xerr = SDSS['mstellar_err'][:300], yerr = SDSS['sfr_tot_p84'][:300] - SDSS['sfr_tot_p50'][:300], label = 'SDSS', fmt='o', markersize = 0.1, linewidth=0.1, capsize=0.1)
     # print (SDSS['sfr_tot_p50'])
     # ax[0,0].scatter(SDSS['mstellar_median'], SDSS['sfr_tot_p50'], s = 0.1, color = 'r')
     ax[0,0].plot(x, models.Saintonge16_MS(x), color = 'orange', label = 'Saintonge+16')
@@ -65,7 +68,7 @@ def sfrmplane(GAMA, SDSS, samples3, samples6, samples_SDSS):
     param2 = (np.median(samples3[:,1]))
     param3 = (np.median(samples3[:,2]))
     print (param1, param2, param3)
-    ax[0,0].plot(x, models.second_order(x, param1, param2-0.1, param3), color = 'k', label = 'median')
+    ax[0,0].plot(x, models.second_order(x, param1, param2, param3-1.0), color = 'k', label = 'median')
 
     ax[0,0].set_xlabel(r"$\mathrm{\log_{10} M_{*}\, [M_{\odot}]}$")
     ax[0,0].set_ylabel(r"$\mathrm{\log_{10} SFR \, [M_{\odot}\, yr^{-1}]}$")
@@ -76,7 +79,7 @@ def sfrmplane(GAMA, SDSS, samples3, samples6, samples_SDSS):
     ax[0,1].set_xlim(7, 12)
     ax[0,1].set_ylim(0, 1)
     # ax[0,0].legend()
-    plt.savefig('img/test.pdf')
+    plt.savefig('img/test_full_sample.pdf')
 
 def mass_functions(gsmf_params, samples1):
     Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
@@ -160,3 +163,11 @@ def mass_functions(gsmf_params, samples1):
     plt.legend()
     plt.savefig('img/mass_functions.pdf')
     # return M, phi_Mstar_Baldry, phi_Mstar_GAMA18, xbaldry, np.log10(baldry), baldry_err
+
+def asymmetry(SDSS_blue, SDSS_red):
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(12,6))
+    bins = np.linspace(0,2.5,50)
+    ax[0,0].hist(SDSS_blue['ratio'], bins = bins, color = 'blue', alpha = 0.2)
+    ax[0,0].hist(SDSS_red['ratio'], bins = bins, color = 'red', alpha = 0.2)
+    ax[0,0].set_xlabel('84th - 50th percentiles/ 50th - 16th percentiles')
+    plt.savefig('img/asymmetry_comparison.pdf')

@@ -3,6 +3,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
+import models
+
 def read_GASS():
     xxGASS = fits.open('data/xxGASS_MASTER_CO_170620_final.fits')
     xxGASS = Table(xxGASS[1].data).to_pandas()
@@ -36,12 +38,36 @@ def read_GAMA():
 def read_SDSS():
     SDSS = fits.open('data/Skyserver_query.fits')
     SDSS = Table(SDSS[1].data).to_pandas()
-    SDSS = SDSS[SDSS['sfr_tot_p50'] > -9999]
-    SDSS = SDSS[SDSS['mstellar_median'] > 7]
-    print (min(SDSS['sfr_tot_p50']))
-    print (max(SDSS['sfr_tot_p50']))
-    print (min(SDSS['mstellar_median']))
-    print (max(SDSS['mstellar_median']))
     print (SDSS.columns)
-    print (SDSS)
-    return SDSS
+    print(len(SDSS))
+    SDSS = SDSS[SDSS['sfr_tot_p50'] > -9999]
+    SDSS = SDSS[SDSS['mstellar_median'] > 5.0]
+    print (len(SDSS))
+    SDSS['errs'] = (SDSS['sfr_tot_p84'] - SDSS['sfr_tot_p16'])/2
+    SDSS['ratio'] = (SDSS['sfr_tot_p84'] - SDSS['sfr_tot_p50'])/(SDSS['sfr_tot_p50'] - SDSS['sfr_tot_p16'])
+    # SDSS2 = SDSS[SDSS['ratio'] > 0.5]
+    # SDSS2 = SDSS2[SDSS2['ratio'] < 1.5]
+    # print ('fraction without uneven errors', len(SDSS2)/len(SDSS))
+    # print (min(SDSS2['z']))
+    # print (max(SDSS2['z']))
+    # print (min(SDSS2['mstellar_median']))
+    # print (max(SDSS2['mstellar_median']))
+    # print (min(SDSS2['sfr_tot_p50']))
+    # print (max(SDSS2['sfr_tot_p50']))
+    SDSS_red = SDSS[SDSS['sfr_tot_p50'] < models.second_order(SDSS['mstellar_median'], -0.0325, 1.2222, -9.1109 - 1.0)]
+    SDSS_blue = SDSS[SDSS['sfr_tot_p50'] >= models.second_order(SDSS['mstellar_median'], -0.0325, 1.2222, -9.1109 - 1.0)]
+    return SDSS, SDSS, SDSS_blue, SDSS_red
+
+def read_Chiang():
+    input = fits.open('data/sw_input.fits')
+    input = Table(input[1].data).to_pandas()
+    output = fits.open('data/sw_output.fits')
+    output = Table(output[1].data).to_pandas()
+    output['z'] = input['redshift']
+    output = output[output['z']<0.06]
+    output = output[output['z']>0.005]
+    output['m_err'] = 0
+    output['sfr_err'] = 0
+    # print (output[['lmass16_all', 'lmass50_all', 'lmass84_all']])
+    # print (output[['lsfr16_all', 'lsfr50_all', 'lsfr84_all']])
+    return output

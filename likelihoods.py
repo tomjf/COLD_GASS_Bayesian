@@ -159,11 +159,11 @@ def log_mainsequence_priors_full1(params):
         -20.0 < b3 < -5.0 and \
         -5.0 < lnb < 5.0 and \
         0.0 < r1 < 1.5 and \
-        -15.0 < r2 < -1.0 and \
+        -15.0 < r2 < -0.0 and \
         -5.0 < lnr < 5.0 and \
         9.0 < alpha < 12.0 and \
-        -2.0 < beta < 0.0 and \
-        -4.5 < zeta < 0.0:
+        -5.0 < beta < 0.0 and \
+        -7.0 < zeta < -1.0:
         return 0
     return -np.inf
 

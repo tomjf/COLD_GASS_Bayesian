@@ -33,6 +33,11 @@ def single_schechter(M, gsmf_params):
     phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar2*np.power(10,(alpha2+1)*(M-Mstar)))
     return phi_Mstar_double
 
+def single_schechter2(M, gsmf_params):
+    Mstar, phistar1, alpha1, = gsmf_params
+    phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.power(10,(alpha1+1)*(M-Mstar)))
+    return phi_Mstar_double
+
 def single_schechter_linear(M, gsmf_params):
     Mstar, phistar1, phistar2, alpha1, alpha2 = gsmf_params
     Mstar2 = np.power(10,Mstar)

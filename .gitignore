@@ -20,3 +20,7 @@ log_normal\.py
 data/a99_HIMF\.dat
 
 __pycache__/
+
+data/sw_input\.fits
+
+data/sw_output\.fits

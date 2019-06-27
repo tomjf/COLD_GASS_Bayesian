@@ -10,6 +10,9 @@ import matplotlib as mpl
 mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+from matplotlib import rc
+rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
 import random
 from scipy.optimize import minimize
 from astropy.cosmology import FlatLambdaCDM
@@ -26,6 +29,55 @@ os.environ["OMP_NUM_THREADS"] = "1"
 from multiprocessing import Pool
 pd.options.mode.chained_assignment = None  # default='warn'
 cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
+import nose
+
+import schechter
+
+def set_axis_style(ax, labels):
+    ax.get_xaxis().set_tick_params(direction='out')
+    ax.xaxis.set_ticks_position('bottom')
+    ax.set_xticks(np.arange(1, len(labels) + 1))
+    ax.set_xticklabels(labels)
+    ax.set_xlim(0.25, len(labels) + 0.75)
+    ax.set_xlabel('Sample name')
+
+def adjacent_values(vals, q1, q3):
+    upper_adjacent_value = q3 + (q3 - q1) * 1.5
+    upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
+
+    lower_adjacent_value = q1 - (q3 - q1) * 1.5
+    lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
+    return lower_adjacent_value, upper_adjacent_value
+
+
+
+# Defining error shading for fit on scaling relation plot:
+def shading_linear(sampler_input, samples_input, x_input, chain_discard):
+   lnprob = sampler_input.lnprobability # taking all log probabilities (except first 200)
+   # print (np.shape(lnprob))
+   lnprob = sampler_input.lnprobability[500:, :].reshape(-1)
+   # print (np.shape(lnprob))
+   # print (lnprob)
+   posterior_percentile = np.percentile(lnprob, 31.7) # taking only probabilities within 1sigma
+   # print (posterior_percentile)
+   onesigma = samples_input[np.where(lnprob > posterior_percentile)] # taking samples from these 1sigma probabilities
+   # print (np.shape(onesigma))
+   # print (onesigma)
+   # Building error region for shading fit
+   y_fits = []
+   for i in range(len(onesigma)):
+       # print (onesigma[i])
+       params = onesigma[i][1], onesigma[i][0], onesigma[i][2]
+       y_fits.append(schechter.single_schechter2(x_input, params))
+   y_fits = np.array(y_fits)
+   y_max = []
+   y_min = []
+   for i in range(len(x_input)): # for each x interval, find max and min of fits to shade between
+       y_max.append(max(y_fits[:, i]))
+       y_min.append(min(y_fits[:, i]))
+   y_max = np.array(y_max)
+   y_min = np.array(y_min)
+   return y_max, y_min
 
 def plot_samples_full(sampler, ndim, fname, l):
     fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
@@ -68,7 +120,7 @@ def OmegaH2(bins, yrho):
     rhocrit = 9.2*(10**(-27))
     dMH2 = bins[1] - bins[0]
     rhoH2 = (np.sum((10**yrho)*dMH2)*(2*(10**30)))/((3.086*(10**22))**3)
-    OmegaH2 = (rhoH2/rhocrit)*0.7
+    OmegaH2 = (rhoH2/rhocrit)
     return OmegaH2
 
 def schechfunc(M, rhostar, Mstar, alpha):
@@ -440,6 +492,7 @@ def log_prob_SFR_MH2(params):
     return ll_SFR_MH2 + log_prior_SFR_MH2(params)
 
 
+# nose.run(argv=[__file__, 'nose_tests.py'])
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # read in the COLD GASS data
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -522,7 +575,9 @@ sampler5 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods[
 sampler5.run_mcmc(pos, 1000, progress=True)
 plot_samples_full(sampler5, ndim, 'MH2_observed_all', param_names)
 samples5 = sampler5.chain[:, 500:, :].reshape((-1, ndim))
-plot_corner_full(samples5, 'MH2_observed_all')
+np.savetxt('data/H2_MF_params_all.txt', samples5)
+# samples5 = np.loadtxt('data/H2_MF_params_all.txt')
+# plot_corner_full(samples5, 'MH2_observed_all')
 phistar2 = (np.median(samples5[:, 0]))
 Mstar2 = (np.median(samples5[:, 1]))
 alpha2 = (np.median(samples5[:, 2]))
@@ -533,9 +588,11 @@ print (phistar2, Mstar2, alpha2)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sampler6 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods_d[2][start_i:], prods_d[1][start_i:], error_arr_d[start_i:]))
 sampler6.run_mcmc(pos, 1000, progress=True)
-plot_samples_full(sampler5, ndim, 'MH2_observed_detections', param_names)
+plot_samples_full(sampler6, ndim, 'MH2_observed_detections', param_names)
 samples6 = sampler6.chain[:, 500:, :].reshape((-1, ndim))
-plot_corner_full(samples6, 'MH2_observed_detections')
+np.savetxt('data/H2_MF_params_detections.txt', samples6)
+# samples6 = np.loadtxt('data/H2_MF_params_detections.txt')
+# plot_corner_full(samples6, 'MH2_observed_detections')
 phistar3 = (np.median(samples6[:, 0]))
 Mstar3 = (np.median(samples6[:, 1]))
 alpha3 = (np.median(samples6[:, 2]))
@@ -546,18 +603,20 @@ print (phistar3, Mstar3, alpha3)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 sampler7 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (prods_d2[2][start_i:], prods_d2[1][start_i:], error_arr_d2[start_i:]))
 sampler7.run_mcmc(pos, 1000, progress=True)
-plot_samples_full(sampler5, ndim, 'MH2_observed_estimated', param_names)
+plot_samples_full(sampler7, ndim, 'MH2_observed_estimated', param_names)
 samples7 = sampler7.chain[:, 500:, :].reshape((-1, ndim))
-plot_corner_full(samples7, 'MH2_observed_estimated')
+np.savetxt('data/H2_MF_params_scaling_estimated.txt', samples7)
+# samples7 = np.loadtxt('data/H2_MF_params_scaling_estimated.txt')
+# plot_corner_full(samples7, 'MH2_observed_estimated')
 phistar4 = (np.median(samples7[:, 0]))
 Mstar4 = (np.median(samples7[:, 1]))
 alpha4 = (np.median(samples7[:, 2]))
 print (phistar4, Mstar4, alpha4)
 # np.savetxt('data/samples5.txt', samples5)
 
-p_m = np.array([7.813, 8.059, 8.305, 8.551, 8.797, 9.043, 9.289, 9.535, 9.781, 10.027])
-p_phi = np.array([0.00286376, 0.00668211, 0.01011862, 0.01107321, 0.00840036, 0.00429564, 0.00334105, 0.00200463, 0.00124096, 0.00028638])
-p_error = np.array([0.00026085, 0.00032034, 0.00050953, 0.00054069, 0.00057808, 0.00055566, 0.00050332, 0.00044624, 0.00033308, 0.00022391])
+# p_m = np.array([7.813, 8.059, 8.305, 8.551, 8.797, 9.043, 9.289, 9.535, 9.781, 10.027])
+# p_phi = np.array([0.00286376, 0.00668211, 0.01011862, 0.01107321, 0.00840036, 0.00429564, 0.00334105, 0.00200463, 0.00124096, 0.00028638])
+# p_error = np.array([0.00026085, 0.00032034, 0.00050953, 0.00054069, 0.00057808, 0.00055566, 0.00050332, 0.00044624, 0.00033308, 0.00022391])
 # sampler6 = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = (p_m[1:], p_phi[1:], p_error[1:]))
 # sampler6.run_mcmc(pos, 1000, progress=True)
 # samples6 = sampler6.chain[:, 800:, :].reshape((-1, ndim))
@@ -568,26 +627,66 @@ p_error = np.array([0.00026085, 0.00032034, 0.00050953, 0.00054069, 0.00057808, 
 
 # print (prods)
 fig, ax = plt.subplots(nrows = 1, ncols = 3, squeeze=False, figsize=(15,5))
-ax[0,0].errorbar(prods[2], prods[1], yerr = error_arr, fmt=".k", capsize=0, zorder = 99)
-ax[0,0].errorbar(prods_d[2], prods_d[1], yerr = error_arr_d, fmt=".b", capsize=0, zorder = 99)
-ax[0,0].errorbar(prods_d2[2], prods_d2[1], yerr = error_arr_d2, fmt=".r", capsize=0, zorder = 99)
+
+ax[0,0].errorbar(   prods[2], prods[1], yerr = error_arr, fmt="^",
+                    ecolor = 'crimson', mec = 'crimson', mfc ='lightcoral',
+                    zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, and \, non-detections}$")
+ax[0,1].errorbar(   prods[2], np.power(10,prods[2])*prods[1], yerr = np.power(10,prods[2])*error_arr,
+                    fmt="^",  ecolor = 'crimson', mec = 'crimson',
+                    mfc ='lightcoral', zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, and \, non-detections}$")
+ax[0,0].errorbar(   prods_d[2], prods_d[1], yerr = error_arr_d, fmt="h",
+                    ecolor = 'royalblue', mec = 'royalblue', mfc ='lightskyblue',
+                    zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, only}$")
+ax[0,1].errorbar(   prods_d[2], np.power(10,prods_d[2])*prods_d[1], yerr = np.power(10,prods_d[2])*error_arr_d, fmt="h",
+                    ecolor = 'royalblue', mec = 'royalblue', mfc ='lightskyblue',
+                    zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, only}$")
+ax[0,0].errorbar(   prods_d2[2], prods_d2[1], yerr = error_arr_d2, fmt=".",
+                    ms = 10, ecolor = 'darkgreen', mec = 'darkgreen',
+                    mfc ='mediumseagreen', zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, and \, estimates}$")
+ax[0,1].errorbar(   prods_d2[2], np.power(10,prods_d2[2])*prods_d2[1], yerr = np.power(10,prods_d2[2])*error_arr_d2, fmt=".",
+                    ms = 10, ecolor = 'darkgreen', mec = 'darkgreen',
+                    mfc ='mediumseagreen', zorder = 99, capsize=2,
+                    label = "$\mathrm{xCOLD \, GASS \, detections \, and \, estimates}$")
 # ax[0,0].errorbar(p_m, p_phi, yerr = p_error, fmt=".b", capsize=0, zorder = 20)
 omegas, omegas2, omegas3 = [], [], []
-for m1, b, f1 in samples5[np.random.randint(len(samples5), size=500)]:
-    ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="g", alpha=0.1)
-    ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="g", alpha=0.1)
-    # print (OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1))))
-    omegas.append(OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*1E5)
-for m1, b, f1 in samples6[np.random.randint(len(samples6), size=500)]:
-    ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="c", alpha=0.1)
-    ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="c", alpha=0.1)
-    # print (OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1))))
-    omegas2.append(OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*1E5)
-for m1, b, f1 in samples7[np.random.randint(len(samples7), size=500)]:
-    ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="r", alpha=0.1)
-    ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="r", alpha=0.1)
-    # print (OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1))))
-    omegas3.append(OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*1E5)
+N = 10000
+omegas_all = np.zeros((N,3))
+i = 0
+for m1, b, f1 in samples5[np.random.randint(len(samples5), size=N)]:
+    # ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="g", alpha=0.1)
+    # ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="g", alpha=0.1)
+    om1 = OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*np.power(10,5)*0.7
+    omegas.append(om1)
+for m1, b, f1 in samples6[np.random.randint(len(samples6), size=N)]:
+    # ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="c", alpha=0.1)
+    # ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="c", alpha=0.1)
+    om2 = OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*np.power(10,5)*0.7
+    omegas2.append(om2)
+for m1, b, f1 in samples7[np.random.randint(len(samples7), size=N)]:
+    # ax[0,0].plot(M, schechfunc(np.power(10,M),m1, 10**b,f1), color="r", alpha=0.1)
+    # ax[0,1].plot(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)), color="r", alpha=0.1)
+    om3 = OmegaH2(M2, np.log10(np.power(10,M2)*schechfunc(np.power(10,M2),m1, 10**b,f1)))*np.power(10,5)*0.7
+    omegas3.append(om3)
+    i+=1
+omegas_all[:,0] = omegas2
+omegas_all[:,1] = omegas3
+omegas_all[:,2] = omegas
+M3 = np.linspace(7.5,10.5, 100)
+ymin, ymax = shading_linear(sampler5, samples5, M3, 500)
+ax[0,0].fill_between(M3, ymin, ymax, color = 'lightcoral', alpha = 0.2)
+ax[0,1].fill_between(M3, np.power(10,M3)*ymin, np.power(10,M3)*ymax, color = 'lightcoral', alpha = 0.2)
+ymin, ymax = shading_linear(sampler6, samples6, M3, 500)
+ax[0,0].fill_between(M3, ymin, ymax, color = 'lightskyblue', alpha = 0.2)
+ax[0,1].fill_between(M3, np.power(10,M3)*ymin, np.power(10,M3)*ymax, color = 'lightskyblue', alpha = 0.2)
+ymin, ymax = shading_linear(sampler7, samples7, M3, 500)
+ax[0,0].fill_between(M3, ymin, ymax, color = 'mediumseagreen', alpha = 0.2)
+ax[0,1].fill_between(M3, np.power(10,M3)*ymin, np.power(10,M3)*ymax, color = 'mediumseagreen', alpha = 0.2)
+
 Mstar = 9.35
 phistar1 = 4.29E-3
 alpha1 = -1.03
@@ -595,28 +694,77 @@ phi_Mstar_double = np.log(10) * np.exp(-np.power(10,M-Mstar)) * (phistar1*np.pow
 phi_Mstar_double2 = np.log(10) * np.exp(-np.power(10,M-Mstar2)) * (phistar2*np.power(10,(alpha2+1)*(M-Mstar2)))
 phi_Mstar_double3 = np.log(10) * np.exp(-np.power(10,M-Mstar3)) * (phistar3*np.power(10,(alpha3+1)*(M-Mstar3)))
 phi_Mstar_double4 = np.log(10) * np.exp(-np.power(10,M-Mstar4)) * (phistar4*np.power(10,(alpha4+1)*(M-Mstar4)))
+
+
+keres_params = np.log10(7.5/(0.7**2)*np.power(10,8)), 0.0243*(0.7**3), -1.07
+obreschkow_params = np.log10(2.81/(0.7**2)*np.power(10,9)), 0.0089*(0.7**3), -1.18
+ax[0,0].plot(M, schechter.single_schechter2(M, keres_params), color = 'k', linestyle = '-', linewidth = .5, label = "$\mathrm{K+03}$")
+ax[0,0].plot(M, schechter.single_schechter2(M, obreschkow_params), color = 'k', linestyle = '--', linewidth = .5, label = "$\mathrm{O+09}$")
+ax[0,1].plot(M, np.power(10,M)*schechter.single_schechter2(M, keres_params), color = 'k', linestyle = '-', linewidth = .5, label = "$\mathrm{K+03}$")
+ax[0,1].plot(M, np.power(10,M)*schechter.single_schechter2(M, obreschkow_params), color = 'k', linestyle = '--', linewidth = .5, label = "$\mathrm{O+09}$")
 # phi_Mstar_double3 = np.log(10) * np.exp(-np.power(10,M-Mstar3)) * (phistar3*np.power(10,(alpha3+1)*(M-Mstar3)))
 # ax[0,0].plot(M, phi_Mstar_double, color = 'c')
 # plt.plot(M, schechfunc(np.power(10,M), phistar2, 10**Mstar2, alpha2), color = 'c', linestyle = '--', linewidth = 5)
-ax[0,0].plot(M, phi_Mstar_double2, color = 'k', linestyle = '-')
-ax[0,0].plot(M, phi_Mstar_double3, color = 'k', linestyle = '--')
-ax[0,0].plot(M, phi_Mstar_double4, color = 'k', linestyle = ':')
-ax[0,2].hist(omegas, bins = 30, alpha = 0.5, color = 'g')
-ax[0,2].hist(omegas2, bins = 30, alpha = 0.5, color = 'c')
-ax[0,2].hist(omegas3, bins = 30, alpha = 0.5, color = 'r')
-ax[0,2].text(4,10,str(round(np.median(omegas2),2)) + r'$\pm$' + str(round(np.std(omegas2),2)))
-ax[0,2].text(6,10,str(round(np.median(omegas),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
-ax[0,2].text(8,10,str(round(np.median(omegas3),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
+ax[0,0].plot(M, phi_Mstar_double2, color = 'crimson')
+ax[0,1].plot(M, np.power(10,M)*phi_Mstar_double2, color = 'crimson')
+ax[0,0].plot(M, phi_Mstar_double3, color = 'royalblue')
+ax[0,1].plot(M, np.power(10,M)*phi_Mstar_double3, color = 'royalblue')
+ax[0,0].plot(M, phi_Mstar_double4, color = 'darkgreen')
+ax[0,1].plot(M, np.power(10,M)*phi_Mstar_double4, color = 'darkgreen')
+
+parts = ax[0,2].violinplot(omegas_all, showmeans=False, showmedians=False, showextrema=False)
+facecolors = ['lightskyblue', 'mediumseagreen', 'lightcoral']
+i = 0
+for pc in parts['bodies']:
+    pc.set_facecolor(facecolors[i])
+    pc.set_alpha(1)
+    i+=1
+
+quartile1, medians, quartile3 = np.percentile(omegas_all, [16, 50, 84], axis=0)
+print (medians)
+whiskers = np.array([
+    adjacent_values(sorted_array, q1, q3)
+    for sorted_array, q1, q3 in zip(omegas_all, quartile1, quartile3)])
+whiskersMin, whiskersMax = whiskers[:, 0], whiskers[:, 1]
+
+
+medians = np.append(medians, [6.9, 10.2])
+inds = np.arange(1, len(medians) + 1)
+quartile1 = np.append(quartile1, [6.9-2.7, 10.2-3.9])
+quartile3 = np.append(quartile3, [6.9+2.7, 10.2+3.9])
+print (inds)
+print (medians)
+print (quartile1)
+print (quartile3)
+ax[0,2].scatter(inds, medians, marker='o', edgecolors = 'k', color='white', s=40, zorder=3)
+ax[0,2].vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
+# ax[0,2].vlines(inds, whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
+labels = ["$\mathrm{DET}$", "$\mathrm{EST}$", "$\mathrm{ALL}$", "$\mathrm{O+09}$", "$\mathrm{K+03}$"]
+set_axis_style(ax[0,2], labels)
+# ax[0,2].hist(omegas2, bins = 30, alpha = 0.5, color = 'c')
+# ax[0,2].hist(omegas3, bins = 30, alpha = 0.5, color = 'r')
+# ax[0,2].text(4,10,str(round(np.median(omegas2),2)) + r'$\pm$' + str(round(np.std(omegas2),2)))
+# ax[0,2].text(6,10,str(round(np.median(omegas),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
+# ax[0,2].text(8,10,str(round(np.median(omegas3),2)) + r'$\pm$' + str(round(np.std(omegas),2)))
 # plt.plot(M, phi_Mstar_double3, color = 'b')
-ax[0,0].axvline(8.2)
-ax[0,0].set_ylim(0.00005, 0.05)
-ax[0,1].set_ylim(0, 7)
+ax[0,0].axvline(8.2, color = 'k', linestyle = '-.', linewidth = .5, label = "$\mathrm{xCOLD \, GASS \, \log M_{*} \, completeness \, limit}$", zorder = 0)
+ax[0,0].axvline(9.2, color = 'k', linestyle = ':', linewidth = .5, label = "$\mathrm{xCOLD \, GASS \, integration \, completeness \, limit}$", zorder = 0)
+ax[0,1].axvline(8.2, color = 'k', linestyle = '-.', linewidth = .5, label = "$\mathrm{xCOLD \, GASS \, \log M_{*} \, completeness \, limit}$", zorder = 0)
+ax[0,1].axvline(9.2, color = 'k', linestyle = ':', linewidth = .5, label = "$\mathrm{xCOLD \, GASS \, integration \, completeness \, limit}$", zorder = 0)
+ax[0,0].set_ylim(0.00001, 0.1)
 ax[0,0].set_xlim(7.5, 10.5)
 ax[0,0].set_yscale('log')
-ax[0,0].set_xlabel("$\log(M_{H2}) \quad [M_\odot]$")
-ax[0,0].set_ylabel("$\log(\phi) \quad [Mpc^{-3} dex^{-1}]$")
-ax[0,1].set_xlabel("$\log(M_{H2}) \quad [M_\odot]$")
-ax[0,1].set_ylabel("$\log(p) \quad [M_{\odot} Mpc^{-3} dex^{-1}]$")
-ax[0,2].set_xlabel("$\Omega_{H2} \, [10^{-5}h^{-1}]$")
+ax[0,1].set_xlim(7.5, 10.5)
+ax[0,1].set_ylim(10000, np.power(10,7.5))
+ax[0,1].set_yscale('log')
+ax[0,0].set_xlabel("$\mathrm{\log_{10}(M_{H2}) \, [M_\odot]}$")
+ax[0,0].set_ylabel("$\mathrm{\log_{10}\phi(M_{H2}) \, [Mpc^{-3} dex^{-1}]}$")
+ax[0,1].set_xlabel("$\mathrm{\log_{10}(M_{H2}) \, [M_\odot]}$")
+ax[0,1].set_ylabel("$\mathrm{\log_{10} \\rho (M_{H2}) \, [M_{\odot} Mpc^{-3} dex^{-1}]}$")
+ax[0,2].set_ylabel("$\mathrm{\Omega_{H2} \, [10^{-5}h^{-1}]}$")
+ax[0,2].set_xlabel("")
+ax[0,0].legend(fontsize = 8)
+ax[0,1].legend(fontsize = 8)
+plt.tight_layout()
 plt.savefig('img/omega_h2_estimates.pdf')
 # print (xCOLDGASS_data)

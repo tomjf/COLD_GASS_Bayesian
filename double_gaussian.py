@@ -133,7 +133,7 @@ def bootstrap_GAMA(GAMAb, GAMAr, frac, n):
     return xnew, std, ratio
 
 def sfr_hist_only(samples1, samples2, min_mass, max_mass, gsmf_params, fname):
-    SFR = np.linspace(-4,3,30)
+    SFR = np.linspace(-4,3,40)
     plt.rc('text', usetex=True)
     fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6, 6))
     sfr_hist_data = pd.read_csv('sfr_hist.csv')
@@ -190,12 +190,14 @@ def sfr_hist_only(samples1, samples2, min_mass, max_mass, gsmf_params, fname):
     #     ax[0,0].plot(SFR, np.log10(phi), color = 'k', alpha = 0.05)
     #     ax[0,0].plot(SFR, np.log10(phib), color = 'b', alpha = 0.05)
     #     ax[0,0].plot(SFR, np.log10(phir), color = 'r', alpha = 0.05)
-    phi_SFR = np.log(10) * np.exp(-np.power(10,SFR-np.log10(9.2))) * (0.00016*np.power(10,(-1.51+1)*(SFR-np.log10(9.2))))
+    phi_SFR = np.log(10) * np.exp(-np.power(10,SFR-np.log10(9.2))) * (0.0015*np.power(10,(-1.51+1)*(SFR-np.log10(9.2))))
+    phi_SFR2 = np.log(10) * np.exp(-np.power(10,SFR-np.log10(9.0))) * (0.0015*np.power(10,(-1.48+1)*(SFR-np.log10(9.0))))
     dbin = sfr_hist_data['sfr_3dhst'][1] - sfr_hist_data['sfr_3dhst'][0]
-    ax[0,0].plot(SFR, np.log10(phi_SFR), linestyle = '--', linewidth = 1, color ='k', label = 'Kennicutt')
-    ax[0,0].scatter(sfr_hist_data['sfr_3dhst'], sfr_hist_data['phi_3dhst']/dbin, color = 'g', label ='3D-HST')
-    ax[0,0].scatter(sfr_hist_data['sf_gama'], sfr_hist_data['phi_gama']/dbin, color = 'r', label = 'GAMA')
-    ax[0,0].scatter(sfr_hist_data['sf_gama'], sfr_hist_data['phi_cosmos']/dbin, color = 'b', label = 'COSMOS')
+    ax[0,0].plot(SFR, np.log10(phi_SFR), linestyle = '-', linewidth = 1, color ='b', label = 'Kennicutt maximum likelihood')
+    ax[0,0].plot(SFR, np.log10(phi_SFR2), linestyle = '-', linewidth = 1, color ='k', label = 'Kennicutt least-squares')
+    ax[0,0].scatter(sfr_hist_data['sfr_3dhst'], sfr_hist_data['phi_3dhst'], color = 'g', label ='3D-HST')
+    ax[0,0].scatter(sfr_hist_data['sf_gama'], sfr_hist_data['phi_gama'], color = 'r', label = 'GAMA')
+    ax[0,0].scatter(sfr_hist_data['sf_gama'], sfr_hist_data['phi_cosmos'], color = 'b', label = 'COSMOS')
     ax[0,0].set_ylim(-10,0)
     ax[0,0].set_xlim(-4,3)
     ax[0,0].set_xlabel(r"$\mathrm{\log_{10} SFR \, [M_{\odot} \, yr^{-1}]}$")
@@ -505,7 +507,6 @@ def m_gas_ratio(det):
     plt.savefig('img/atomic_gas_fraction.pdf')
 
 # nose.run(argv=[__file__, 'nose_tests.py'])
-SDSS = read_files.read_SDSS()
 
 popts = pd.read_csv('bestfits.csv')
 mstars = np.linspace(7.6,12.0,45)
@@ -660,28 +661,39 @@ GASS_data2 = det['lgMstar'], nondet['lgMstar'], det['lgMHI'], nondet['lgMHI'], S
 # # np.savetxt('bestfits.csv', data2, delimiter = ',')
 # plt.savefig('img/double_gaussian.pdf')
 
-pool = Pool(2)
-ndim, nwalkers = 10, 100
-param_labels = ['b1', 'b2', 'b3', 'lnb', 'r1', 'r2', 'lnr', 'alpha', 'beta', 'zeta']
-g = [-0.06, +1.8, -12.0, -0.9, 1.0, -12.0, -1.1, 10.6, -0.96, -2.2]
-pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-print (len(SDSS))
-sampler5 = emcee.EnsembleSampler(   nwalkers, ndim,
-                                    likelihoods.log_marg_mainsequence_full_SDSS,
-                                    pool = pool,
-                                    args = (SDSS['mstellar_median'][:10000],
-                                    SDSS['sfr_tot_p50'][:10000],
-                                    SDSS['mstellar_err'][:10000],
-                                    SDSS['sfr_tot_p84'][:10000]-SDSS['sfr_tot_p50'][:10000]))
-sampler5.run_mcmc(pos, 1000, progress=True)
-af = sampler5.acceptance_fraction
-print("Mean acceptance fraction:", np.mean(af))
-plots.plot_samples_full(sampler5, ndim, 'mainsequence_full_SDSS', param_labels)
-samples5 = sampler5.chain[:, 800:, :].reshape((-1, ndim))
-np.savetxt('data/dbl_gauss_SDSS.txt', samples5)
-samples_SDSS = np.loadtxt('data/dbl_gauss_SDSS.txt')
-samples5_copy = np.copy(samples5)
-plots.plot_corner_full(samples5_copy, 'dbl_gauss_SDSS')
+SDSS, SDSS2, SDSS_blue, SDSS_red = read_files.read_SDSS()
+plots.asymmetry(SDSS_blue, SDSS_red)
+Chiang = read_files.read_Chiang()
+
+# pool = Pool(6)
+# ndim, nwalkers = 10, 100
+# param_labels = ['b1', 'b2', 'b3', 'lnb', 'r1', 'r2', 'lnr', 'alpha', 'beta', 'zeta']
+# g = [-0.06, +1.8, -12.0, -0.9, 0.5, -7.0, -1.1, 10.6, -0.96, -4.2]
+# pos = [g + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+# print (len(SDSS))
+# sampler5 = emcee.EnsembleSampler(   nwalkers, ndim,
+#                                     likelihoods.log_marg_mainsequence_full_SDSS,
+#                                     pool = pool,
+#                                     args = (SDSS['mstellar_median'],
+#                                     SDSS['sfr_tot_p50'],
+#                                     SDSS['mstellar_err'],
+#                                     SDSS['errs']))
+# # sampler5 = emcee.EnsembleSampler(   nwalkers, ndim,
+# #                                     likelihoods.log_marg_mainsequence_full_SDSS,
+# #                                     pool = pool,
+# #                                     args = (Chiang['lmass50_all'][:1000],
+# #                                     Chiang['lsfr50_all'][:1000],
+# #                                     Chiang['m_err'][:1000],
+# #                                     Chiang['sfr_err'][:1000]))
+# sampler5.run_mcmc(pos, 1000, progress=True)
+# af = sampler5.acceptance_fraction
+# print("Mean acceptance fraction:", np.mean(af))
+# plots.plot_samples_full(sampler5, ndim, 'mainsequence_full_SDSS_full_sample', param_labels)
+# samples5 = sampler5.chain[:, 800:, :].reshape((-1, ndim))
+# samples5_copy = np.copy(samples5)
+# np.savetxt('data/dbl_gauss_SDSS_full_sample.txt', samples5)
+samples_SDSS = np.loadtxt('data/dbl_gauss_SDSS_full_sample.txt')
+# plots.plot_corner_full(samples5_copy, 'dbl_gauss_SDSS_full_sample')
 
 
 # g = [-0.06, +1.8, -12.0, -0.9, .64, -8.23, -1.1, 10.6, -0.96, -2.2, 0.8, 10.0, -1.1]
@@ -718,6 +730,8 @@ samples5 = np.hstack((samples5, samples4[:len(samples5), -3:]))
 samples6 = np.hstack((samples6, samples4[:len(samples6), -3:]))
 samples6_copy = np.hstack((samples6_copy, samples4[:len(samples6_copy), -3:]))
 samples6_copy[:, -1] = np.exp(samples6_copy[:, -1])
+# print (np.shape(samples_SDSS))
+samples_SDSS = np.hstack((samples_SDSS, samples4[:len(samples_SDSS), -3:]))
 ndim = 13
 param_labels = ['b1', 'b2', 'b3', 'lnb', 'r1', 'r2', 'lnr', 'alpha', 'beta', 'zeta', 'h1', 'h2', 'log(h1)']
 for i in range(ndim):
@@ -747,16 +761,12 @@ M = np.linspace(7,12,100)
 # print ('(Log) Integral phi(M*)dM* = ', quad(schechter.double_schechter, 8, 1000, args=(np.array(gsmf_params)))[0])
 # print ('(Log) Integral phi(M*)dM* = ', quad(schechter.single_schechter, 8, np.inf, args=(np.array(gsmf_params)))[0])
 
-plots.mass_functions(gsmf_params, samples6)
-# global m_step
-# mass_steps = np.linspace(8,12,9)
-# for idx, element in enumerate(mass_steps):
-#     m_step = element
-fname = 'sfr_hist_double' #+ str(element)
-sfr_hist_only(samples5, samples6, 0, 12, gsmf_params, fname)
-# MHI_mf_only(samples5, samples6, -5, 3, 0, 12, gsmf_params)
+# plots.mass_functions(gsmf_params, samples6)
 
-plots.sfrmplane(GAMA, SDSS, samples5, samples6, samples_SDSS)
+# plots.sfrmplane(GAMA, SDSS2, samples5, samples6, samples_SDSS)
+sfr_hist_only(samples_SDSS, samples6, 0, 12, gsmf_params, 'sfr_hist_double_full_sample')
+# MHI_mf_only(samples_SDSS, samples6, -5, 3, 0, 12, gsmf_params)
+
 
 # np.savetxt('data/samples1.txt', samples4)
 #

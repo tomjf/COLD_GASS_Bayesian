@@ -5,6 +5,22 @@ from scipy.integrate import quad, dblquad, nquad
 import schechter
 import integrands
 import models
+import utilities
+
+def test_calc_Omega_obreschkow():
+    MHI = np.linspace(0,30,200)
+    keres_params = np.log10(7.5/(0.7**2)*np.power(10,8)), 0.0243*(0.7**3), -1.07
+    phi_keres = schechter.single_schechter2(MHI, keres_params)
+    omega_HI_keres = utilities.calc_Omega(MHI, np.log10(np.power(10, MHI)*phi_keres))
+    assert round(omega_HI_keres*0.7,6) == 0.000069
+
+def test_calc_Omega_jones():
+    MHI = np.linspace(0,30,200)
+    params = 9.94, 0.0047, -1.25
+    phi = schechter.single_schechter2(MHI, params)
+    omega_HI = utilities.calc_Omega(MHI, np.log10(np.power(10, MHI)*phi))
+    print (omega_HI)
+    assert round(omega_HI,5) == 0.00039
 
 # check the integral of the total PDF for the SFR-M plane is equal to 1
 def test_integral_pSFR_total_M_dSFR():
