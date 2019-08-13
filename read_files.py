@@ -4,13 +4,20 @@ from astropy.io import fits
 from astropy.table import Table
 
 import models
+import utilities
 
-def read_GASS():
+def read_GASS(flag):
     xxGASS = fits.open('data/xxGASS_MASTER_CO_170620_final.fits')
     xxGASS = Table(xxGASS[1].data).to_pandas()
-    xxGASS = xxGASS[xxGASS['SFR_best'] > -80]
-    # print (xxGASS.columns)
-    # print (xxGASS[['HIar_flag', 'Gdcode', 'GASSDR', 'zHI', 'W50cor', 'lgMHI_old', 'lgMHI', 'lgGF', 'HIconf_flag']])
+    # xxGASS2 = fits.open('data/xGASS_RS_final_Serr_180903.fits')
+    # xxGASS2 = Table(xxGASS2[1].data).to_pandas()
+    # xxGASS['SNR'] = xxGASS2['SNR']
+    # xxGASS['MHI_err'] = np.power(10, xxGASS['lgMHI'])/xxGASS['SNR']
+    # xxGASS['lgMHI_err'] = xxGASS['MHI_err']/(np.power(10,xxGASS['lgMHI'])*np.log(10))
+    if flag == True:
+        xxGASS = xxGASS[xxGASS['SFR_best'] > -80]
+        # print (xxGASS.columns)
+        # print (xxGASS[['HIar_flag', 'Gdcode', 'GASSDR', 'zHI', 'W50cor', 'lgMHI_old', 'lgMHI', 'lgGF', 'HIconf_flag']])
     data = xxGASS[['SFR_best', 'lgMHI', 'lgMstar', 'SFRerr_best', 'HIsrc', 'HIconf_flag']]
     det = data[data['HIsrc']!=4]
     nondet = data[data['HIsrc']==4]
@@ -38,11 +45,8 @@ def read_GAMA():
 def read_SDSS():
     SDSS = fits.open('data/Skyserver_query.fits')
     SDSS = Table(SDSS[1].data).to_pandas()
-    print (SDSS.columns)
-    print(len(SDSS))
     SDSS = SDSS[SDSS['sfr_tot_p50'] > -9999]
     SDSS = SDSS[SDSS['mstellar_median'] > 5.0]
-    print (len(SDSS))
     SDSS['errs'] = (SDSS['sfr_tot_p84'] - SDSS['sfr_tot_p16'])/2
     SDSS['ratio'] = (SDSS['sfr_tot_p84'] - SDSS['sfr_tot_p50'])/(SDSS['sfr_tot_p50'] - SDSS['sfr_tot_p16'])
     # SDSS2 = SDSS[SDSS['ratio'] > 0.5]
@@ -71,3 +75,17 @@ def read_Chiang():
     # print (output[['lmass16_all', 'lmass50_all', 'lmass84_all']])
     # print (output[['lsfr16_all', 'lsfr50_all', 'lsfr84_all']])
     return output
+
+def read_COLD_GASS():
+    bootstrap = 0.8
+    # Reading in the COLD GASS file and converting to pandas df
+    xCOLDGASS = fits.open('data/xCOLDGASS_PubCat.fits')
+    xCOLDGASS_data = Table(xCOLDGASS[1].data).to_pandas()
+    # Calculate lumdist, Vm, MH2 including limits
+    V_CG, V_CG2 = utilities.calcVm(xCOLDGASS_data, len(xCOLDGASS_data), bootstrap)
+    xCOLDGASS_data['D_L'] = utilities.lumdistance(xCOLDGASS_data)
+    xCOLDGASS_data['V_m'] = V_CG
+    xCOLDGASS_data['V_m2'] = V_CG2
+    xCOLDGASS_data['MH2'] = xCOLDGASS_data['LOGMH2'] + xCOLDGASS_data['LIM_LOGMH2']
+    xCOLDGASS_data['new_LOGMH2'] = 0
+    return xCOLDGASS_data

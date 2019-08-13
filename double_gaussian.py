@@ -414,7 +414,7 @@ def sfr_histogram(GAMA, samples4, samples5, M, phi_Baldry):
     ax[1,1].set_ylim(6, 13)
     ax[1,0].set_ylim(-10, 0.0)
 
-    xxGASS, det, nondet = read_files.read_GASS()
+    xxGASS, det, nondet = read_files.read_GASS(True)
     ax[2,0].scatter(xxGASS['lgMstar'], xxGASS['lgMHI'], s = 3)
     # for params in samples4[np.random.randint(len(samples4), size=10)]:
     #     b1, b2, b3, lnb, r1, r2, lnr, alpha, beta, zeta, h1, h2, lnh = params
@@ -515,7 +515,7 @@ bins = np.linspace(-3.5,1.5,51)
 sfr_bins = np.linspace(-3.0, 0.6, 19)
 GAMA, GAMAb, GAMAr = read_files.read_GAMA()
 # GAMA = GAMA.drop(GAMA[(GAMA['logSFR'] <  -0.06*GAMA['logM*']*GAMA['logM*'] + 1.95*GAMA['logM*'] -14.5) & (GAMA ['logM*']<9.0)].index)
-xxGASS, det, nondet = read_files.read_GASS()
+xxGASS, det, nondet = read_files.read_GASS(True)
 # calculate error matrices etc
 S1 = S_error(det['SFRerr_best'].values, [0.2])
 S2 = S_error(nondet['SFRerr_best'].values, [0.2])
@@ -545,7 +545,7 @@ GAMA_sforming = GAMA_sf['logM*'], GAMA_sf['logSFR'], GAMA_sf['logM*err'], GAMA_s
 passive_data = xnew, ratio, std
 sfr_hist_data = sfr, n
 
-xxGASS, det, nondet = read_files.read_GASS()
+xxGASS, det, nondet = read_files.read_GASS(True)
 xxGASS_final = fits.open('data/xGASS_RS_final_Serr_180903.fits')
 xxGASS_final = Table(xxGASS_final[1].data).to_pandas()
 xxGASS['SNR'] = xxGASS_final['SNR']

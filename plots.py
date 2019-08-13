@@ -5,10 +5,13 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import numpy as np
 import corner
+from scipy.ndimage.filters import gaussian_filter1d
 
 # import COLD GASS functions
 import schechter
 import models
+import utilities
+import read_files
 
 def plot_samples_full(sampler, ndim, fname, l):
     fig, axes = plt.subplots(ndim, figsize=(10, 20), sharex=True)
@@ -171,3 +174,67 @@ def asymmetry(SDSS_blue, SDSS_red):
     ax[0,0].hist(SDSS_red['ratio'], bins = bins, color = 'red', alpha = 0.2)
     ax[0,0].set_xlabel('84th - 50th percentiles/ 50th - 16th percentiles')
     plt.savefig('img/asymmetry_comparison.pdf')
+
+def MH2_varying_with_Mstar(xCOLDGASS_data):
+    xxGASS, det, nondet = read_files.read_GASS(True)
+    xxGASS['LOGMSTAR'] = xxGASS['lgMstar']
+    V_CG, V_CG2 = utilities.calcVm(xxGASS, len(xxGASS), .8)
+    xxGASS['V_m'] = V_CG
+    bins_h2 = np.linspace(7.69, 10.15, 15)
+    bins_hI = np.linspace(np.min(xxGASS['lgMHI']), np.max(xxGASS['lgMHI']), 15)
+    mstar_bins = np.linspace(9,11.0,200)
+    omega_H2, omega_HI, mass = [], [], []
+    max_omega_H2, min_omega_H2 = [], []
+    max_omega_HI, min_omega_HI = [], []
+    omega_total = (5.22/0.7) / np.power(10,5)
+    omega_total_HI = (3.2) / np.power(10,4)
+    sl_hI = utilities.Schechter_GASS(xxGASS, bins_hI)
+    rho_hI = np.array(sl_hI[2] + np.log10(sl_hI[1]))
+    omega_total_HI = utilities.OmegaH2(np.array(sl_hI[2]), rho_hI)
+    for idx, element in enumerate(mstar_bins):
+        # do the cuts for the COLD GASS data
+        mstar_lim = xCOLDGASS_data[xCOLDGASS_data['LOGMSTAR'] >= element]
+        mstar_lim_hI = xxGASS[xxGASS['LOGMSTAR'] >= element]
+        sl_h2 = utilities.Schechter(mstar_lim, bins_h2)
+        error = utilities.bootstrap_with_replacement(mstar_lim, int(len(mstar_lim)*.8), bins_h2)
+        rho_h2 = np.array(sl_h2[2] + np.log10(sl_h2[1]))
+        max_rho_h2 = np.array(sl_h2[2] + np.log10(sl_h2[1] + error))
+        min_rho_h2 = np.array(sl_h2[2] + np.log10(sl_h2[1] - error))
+        om = utilities.OmegaH2(np.array(sl_h2[2]), rho_h2)
+        max_om = utilities.OmegaH2(np.array(sl_h2[2]), max_rho_h2)
+        min_om = utilities.OmegaH2(np.array(sl_h2[2]), min_rho_h2)
+        # do the cuts for the HI data
+        sl_hI = utilities.Schechter_GASS(mstar_lim_hI, bins_hI)
+        error_HI = utilities.bootstrap_with_replacement_HI(mstar_lim_hI, int(len(mstar_lim_hI)*.8), bins_hI)
+        rho_hI = np.array(sl_hI[2] + np.log10(sl_hI[1]))
+        max_rho_hI = np.array(sl_hI[2] + np.log10(sl_hI[1] + error_HI))
+        min_rho_hI = np.array(sl_hI[2] + np.log10(sl_hI[1] - error_HI))
+        om_HI = utilities.OmegaH2(np.array(sl_hI[2]), rho_hI)
+        max_om_HI = utilities.OmegaH2(np.array(sl_hI[2]), max_rho_hI)
+        min_om_HI = utilities.OmegaH2(np.array(sl_hI[2]), min_rho_hI)
+        mass.append(element)
+        # append the final values
+        omega_H2.append(om/omega_total)
+        max_omega_H2.append(max_om/omega_total)
+        min_omega_H2.append(min_om/omega_total)
+        omega_HI.append(om_HI/omega_total_HI)
+        max_omega_HI.append(max_om_HI/omega_total_HI)
+        min_omega_HI.append(min_om_HI/omega_total_HI)
+    # smooth out all the data
+    omega_HI = gaussian_filter1d(omega_HI, sigma=5)
+    omega_H2 = gaussian_filter1d(omega_H2, sigma=5)
+    max_omega_H2 = gaussian_filter1d(max_omega_H2, sigma=5)
+    min_omega_H2 = gaussian_filter1d(min_omega_H2, sigma=5)
+    max_omega_HI = gaussian_filter1d(max_omega_HI, sigma=5)
+    min_omega_HI = gaussian_filter1d(min_omega_HI, sigma=5)
+    fig, ax = plt.subplots(nrows = 1, ncols = 1, squeeze=False, figsize=(6,6))
+    ax[0,0].plot(mass, omega_H2, label = r"$\mathrm{H2,\, xCOLD \, GASS}$")
+    ax[0,0].fill_between(mass, min_omega_H2, max_omega_H2, color = 'b', alpha = 0.1)
+    ax[0,0].plot(mass, omega_HI, label = r"$\mathrm{HI,\, xGASS}$", color = 'r')
+    ax[0,0].fill_between(mass, min_omega_HI, max_omega_HI, color = 'r', alpha = 0.1)
+    ax[0,0].set_xlim(9,11)
+    ax[0,0].set_ylim(0,1)
+    ax[0,0].set_xlabel(r"$\mathrm{\log \, M_{*} \, [M_{\odot}]}$")
+    ax[0,0].set_ylabel(r"$\mathrm{\Omega_{HX}(M>M_{*})/\Omega_{HX}}$")
+    plt.legend()
+    plt.savefig('img/MH2_varying_with_Mstar.pdf')
